@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watchclaw — Agent Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f9f8f5;
+    --border: #e4e2dc;
+    --border2: #d0cec6;
+    --ink: #1a1915;
+    --ink2: #3d3b35;
+    --muted: #8c897f;
+    --green: #0a7c4a;
+    --green-bg: #edfaf3;
+    --green-border: #b3e8ce;
+    --red: #c4132a;
+    --red-bg: #fff0f2;
+    --red-border: #f5b8c0;
+    --yellow: #8a5c00;
+    --yellow-bg: #fffbeb;
+    --yellow-border: #f5dfa0;
+    --blue: #0057b3;
+    --blue-bg: #eff6ff;
+    --blue-border: #bdd9ff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: 'DM Sans', sans-serif; min-height: 100vh; font-size: 13px; overflow: hidden; }
+
+  /* ── HEADER ── */
+  .header {
+    height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
+  }
+  .logo { font-family: 'Fraunces', serif; font-weight: 900; font-size: 21px; color: var(--ink); letter-spacing: -0.5px; }
+  .logo span { color: var(--green); }
+
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: 100px; font-size: 12px; font-weight: 600;
+    border: 1.5px solid; transition: all 0.3s;
+  }
+  .status-chip.ok   { color: var(--green);  border-color: var(--green-border);  background: var(--green-bg); }
+  .status-chip.warn { color: var(--yellow); border-color: var(--yellow-border); background: var(--yellow-bg); }
+  .status-chip.err  { color: var(--red);    border-color: var(--red-border);    background: var(--red-bg); }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot.green  { background: var(--green); }
+  .dot.red    { background: var(--red);   animation: blink .8s step-end infinite; }
+  .dot.yellow { background: #d4a017;      animation: blink 1.4s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .clock { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 188px 1fr 320px;
+    height: calc(100vh - 52px);
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .nav-section { padding: 14px 0 6px; }
+  .nav-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); padding: 0 14px 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px; padding: 8px 14px;
+    cursor: pointer; border-left: 2.5px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .nav-item:hover { background: var(--surface2); }
+  .nav-item.active { background: var(--surface2); border-left-color: var(--ink); }
+  .nav-emoji { font-size: 15px; flex-shrink: 0; }
+  .nav-info { flex: 1; min-width: 0; }
+  .nav-name { font-size: 12px; font-weight: 500; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-sub  { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .status-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 6px;
+    border-radius: 100px; letter-spacing: 0.04em; flex-shrink: 0;
+  }
+  .status-badge.ok   { color: var(--green);  background: var(--green-bg);  border: 1px solid var(--green-border); }
+  .status-badge.err  { color: var(--red);    background: var(--red-bg);    border: 1px solid var(--red-border); }
+  .status-badge.warn { color: var(--yellow); background: var(--yellow-bg); border: 1px solid var(--yellow-border); }
+
+  .sidebar-divider { height: 1px; background: var(--border); margin: 4px 14px; }
+
+  .heartbeat-box {
+    margin: 10px 12px 14px;
+    padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .heartbeat-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .heartbeat-val { font-size: 12px; font-weight: 600; color: var(--green); }
+  .heartbeat-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── MAIN ── */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── FLOW — hero section ── */
+  .flow-section { flex: 1; padding: 16px 18px 12px; display: flex; flex-direction: column; min-height: 0; }
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label span { flex: 1; height: 1px; background: var(--border); }
+
+  .flow-canvas {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; position: relative; overflow: hidden;
+    box-shadow: var(--shadow); min-height: 0;
+  }
+  .flow-canvas::before {
+    content: ''; position: absolute; inset: 0;
+    background-image: radial-gradient(circle, var(--border2) 1px, transparent 1px);
+    background-size: 28px 28px; opacity: 0.45;
+  }
+  .flow-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .fnode {
+    position: absolute; background: var(--surface); border: 1.5px solid var(--border2);
+    border-radius: 12px; padding: 12px 16px; cursor: pointer;
+    transition: all 0.18s; text-align: center; min-width: 104px; z-index: 2;
+    box-shadow: var(--shadow);
+  }
+  .fnode:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .fnode.selected { border-color: var(--ink); box-shadow: 0 0 0 2.5px rgba(26,25,21,0.15), var(--shadow-md); }
+  .fnode.s-err  { border-color: var(--red-border);    background: var(--red-bg); }
+  .fnode.s-warn { border-color: var(--yellow-border); background: var(--yellow-bg); }
+  .fnode.s-ok   { border-color: var(--green-border);  background: var(--green-bg); }
+
+  .fnode-icon   { font-size: 22px; display: block; margin-bottom: 4px; }
+  .fnode-name   { font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+  .fnode-status { font-size: 9px; font-weight: 700; margin-top: 3px; letter-spacing: 0.04em; }
+  .fnode-status.ok   { color: var(--green); }
+  .fnode-status.err  { color: var(--red); }
+  .fnode-status.warn { color: var(--yellow); }
+
+  .fnode-dot {
+    position: absolute; top: 7px; right: 7px;
+    width: 8px; height: 8px; border-radius: 50%; border: 2px solid white;
+  }
+  .fnode-dot.ok   { background: var(--green); }
+  .fnode-dot.err  { background: var(--red);   animation: blink .8s step-end infinite; }
+  .fnode-dot.warn { background: #d4a017;      animation: blink 1.4s step-end infinite; }
+
+  /* ── LOG STRIP — collapsed at bottom ── */
+  .log-strip {
+    flex-shrink: 0; border-top: 1px solid var(--border);
+    background: var(--surface); transition: height 0.25s ease;
+    overflow: hidden;
+  }
+  .log-strip.collapsed { height: 36px; }
+  .log-strip.expanded  { height: 180px; }
+
+  .log-strip-header {
+    height: 36px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px; cursor: pointer; user-select: none;
+  }
+  .log-strip-header:hover { background: var(--surface2); }
+  .log-strip-title {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .log-err-count {
+    background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border);
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 100px;
+  }
+  .log-toggle { font-size: 10px; color: var(--muted); }
+
+  .log-body { padding: 0 18px 8px; overflow-y: auto; height: 144px; }
+
+  .log-row {
+    display: grid; grid-template-columns: 64px 68px 34px 1fr;
+    gap: 6px; padding: 4px 4px; border-bottom: 1px solid var(--border);
+    cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10.5px;
+    border-radius: 3px; transition: background 0.1s;
+  }
+  .log-row:hover   { background: var(--surface2); }
+  .log-row.err-row { background: var(--red-bg); }
+  .log-row.warn-row{ background: var(--yellow-bg); }
+  .log-t { color: var(--muted); }
+  .log-n { font-weight: 500; }
+  .log-n.openclaw { color: var(--blue); }
+  .log-n.scraper  { color: var(--red); }
+  .log-n.discord  { color: #5865f2; }
+  .log-n.claude   { color: #7c3aed; }
+  .log-n.x        { color: var(--ink2); }
+  .log-lv { font-weight: 700; font-size: 9px; display: flex; align-items: center; }
+  .log-lv.error { color: var(--red); }
+  .log-lv.warn  { color: var(--yellow); }
+  .log-lv.info  { color: var(--green); }
+  .log-msg { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── INSPECTOR ── */
+  .inspector {
+    background: var(--surface); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* inspector top — status + name */
+  .insp-top {
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .insp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .insp-node { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 900; color: var(--ink); line-height: 1.1; margin-bottom: 8px; }
+  .insp-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 11px; border-radius: 100px; font-size: 11px; font-weight: 600; border: 1.5px solid;
+  }
+  .insp-pill.ok   { color: var(--green);  border-color: var(--green-border);  background: var(--green-bg); }
+  .insp-pill.err  { color: var(--red);    border-color: var(--red-border);    background: var(--red-bg); }
+  .insp-pill.warn { color: var(--yellow); border-color: var(--yellow-border); background: var(--yellow-bg); }
+
+  /* inspector body — scrollable */
+  .insp-body { flex: 1; overflow-y: auto; padding: 16px 20px 20px; }
+
+  .alert-bar {
+    background: var(--red-bg); border: 1px solid var(--red-border);
+    border-radius: 8px; padding: 11px 13px; font-size: 11px; color: var(--red);
+    line-height: 1.55; margin-bottom: 16px; display: flex; gap: 8px;
+  }
+  .alert-bar-icon { flex-shrink: 0; font-size: 14px; }
+
+  /* fixes — PROMINENT */
+  .fixes-section { margin-bottom: 20px; }
+  .insp-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
+  }
+
+  .fix-card {
+    border-radius: 8px; padding: 11px 13px; margin-bottom: 7px;
+    font-size: 12px; line-height: 1.6; border: 1px solid; color: var(--ink2);
+    position: relative;
+  }
+  .fix-card.err  { background: var(--red-bg);    border-color: var(--red-border); }
+  .fix-card.warn { background: var(--yellow-bg); border-color: var(--yellow-border); }
+  .fix-card.info { background: var(--blue-bg);   border-color: var(--blue-border); }
+  .fix-card.ok   { background: var(--green-bg);  border-color: var(--green-border); }
+  .fix-num { font-weight: 700; color: var(--muted); margin-right: 4px; }
+
+  .prompt-block {
+    background: #f0f4ff; border: 1px solid #c7d4f5; border-radius: 6px;
+    padding: 8px 11px; font-size: 11px; color: var(--ink2);
+    margin-top: 8px; cursor: pointer; position: relative;
+    line-height: 1.5; transition: background 0.12s;
+    padding-right: 52px;
+  }
+  .prompt-block:hover { background: #e6ecff; }
+  .prompt-copy-btn {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; font-weight: 600; color: var(--blue);
+    background: white; border: 1px solid var(--blue-border);
+    border-radius: 4px; padding: 2px 7px; cursor: pointer;
+    white-space: nowrap; font-family: 'DM Sans', sans-serif;
+    transition: all 0.12s;
+  }
+  .prompt-copy-btn:hover { background: var(--blue); color: white; }
+  .prompt-label {
+    font-size: 9px; font-weight: 700; color: var(--blue);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  /* metrics — secondary, compact */
+  .metrics-section { margin-bottom: 20px; }
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .metric-cell {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 10px; text-align: center; position: relative;
+  }
+  .metric-icon { font-size: 14px; display: block; margin-bottom: 3px; }
+  .metric-v { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 700; color: var(--ink); }
+  .metric-l { font-size: 9px; color: var(--muted); margin-top: 1px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .metric-info {
+    position: absolute; top: 5px; right: 6px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--border); color: var(--muted); font-size: 8px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; cursor: default;
+    transition: background 0.15s;
+  }
+  .metric-info:hover { background: var(--border2); color: var(--ink2); }
+  .metric-info:hover .metric-tooltip { display: block; }
+  .metric-tooltip {
+    display: none; position: absolute; bottom: calc(100% + 5px); right: 0;
+    background: var(--ink); color: white; font-size: 10px; font-weight: 400;
+    padding: 5px 9px; border-radius: 6px; white-space: nowrap; z-index: 99;
+    pointer-events: none; line-height: 1.4; text-align: left; box-shadow: var(--shadow-md);
+  }
+  .metric-tooltip::after {
+    content: ''; position: absolute; top: 100%; right: 5px;
+    border: 4px solid transparent; border-top-color: var(--ink);
+  }
+
+  /* events — compact */
+  .events-section { margin-bottom: 16px; }
+  .ev-row { display: flex; gap: 7px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 10.5px; align-items: flex-start; }
+  .ev-t   { font-family: 'DM Mono', monospace; color: var(--muted); white-space: nowrap; flex-shrink: 0; font-size: 10px; }
+  .ev-lv  { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+  .ev-lv.error { background: var(--red-bg);    color: var(--red); }
+  .ev-lv.warn  { background: var(--yellow-bg); color: var(--yellow); }
+  .ev-lv.info  { background: var(--green-bg);  color: var(--green); }
+  .ev-msg { color: var(--ink2); line-height: 1.5; }
+
+  .no-issues {
+    background: var(--green-bg); border: 1px solid var(--green-border);
+    border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 16px;
+  }
+
+  .sim-btn {
+    width: 100%; padding: 8px; font-family: inherit; font-size: 11px; font-weight: 500;
+    background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
+    color: var(--ink2); cursor: pointer; transition: all 0.12s;
+  }
+  .sim-btn:hover { background: var(--ink); color: white; border-color: var(--ink); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">Watch<span>claw</span></div>
+  <div class="status-chip err" id="sysChip">
+    <span class="dot red" id="sysDot"></span>
+    <span id="sysLabel">2 issues detected</span>
+  </div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Agents</div>
+      <div class="nav-item active" onclick="selectNode('openclaw')">
+        <span class="nav-emoji">🦞</span>
+        <div class="nav-info"><div class="nav-name">OpenClaw</div><div class="nav-sub">Discord · Claude API</div></div>
+        <span class="status-badge warn" id="sb-openclaw">WARN</span>
+      </div>
+      <div class="nav-item" onclick="selectNode('discord')">
+        <span class="nav-emoji">💬</span>
+        <div class="nav-info"><div class="nav-name">Discord Bot</div><div class="nav-sub">gateway · online</div></div>
+        <span class="status-badge ok" id="sb-discord">OK</span>
+      </div>
+      <div class="nav-item" onclick="selectNode('claude')">
+        <span class="nav-emoji">✦</span>
+        <div class="nav-info"><div class="nav-name">Claude API</div><div class="nav-sub">sonnet-4-6</div></div>
+        <span class="status-badge ok" id="sb-claude">OK</span>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="nav-section">
+      <div class="nav-label">Automations</div>
+      <div class="nav-item" onclick="selectNode('scraper')">
+        <span class="nav-emoji">⚙️</span>
+        <div class="nav-info"><div class="nav-name">News Scraper</div><div class="nav-sub">X → Discord · daily</div></div>
+        <span class="status-badge err" id="sb-scraper">FAIL</span>
+      </div>
+      <div class="nav-item" onclick="selectNode('x')">
+        <span class="nav-emoji">𝕏</span>
+        <div class="nav-info"><div class="nav-name">X / Twitter</div><div class="nav-sub">rate limited</div></div>
+        <span class="status-badge err" id="sb-x">ERR</span>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="heartbeat-box">
+      <div class="heartbeat-label">Collector heartbeat</div>
+      <div class="heartbeat-val">● Live</div>
+      <div class="heartbeat-sub">Last ping 6s ago</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- FLOW — hero -->
+    <div class="flow-section">
+      <div class="section-label">Architecture Flow <span></span></div>
+      <div class="flow-canvas" id="flowCanvas">
+        <svg class="flow-svg" viewBox="0 0 740 100%" preserveAspectRatio="xMidYMid meet" id="flowSvg">
+          <defs>
+            <marker id="arr-ok"  markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#b3e8ce"/></marker>
+            <marker id="arr-err" markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#f5b8c0"/></marker>
+          </defs>
+          <!-- X → Scraper (broken) -->
+          <line id="edge-x-scraper" x1="120" y1="50%" x2="218" y2="50%" stroke="#f5b8c0" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-err)">
+            <animate attributeName="stroke-dashoffset" values="24;0" dur="1.4s" repeatCount="indefinite"/>
+          </line>
+          <text id="lbl-x-scraper" x="169" y="calc(50% - 10)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle" dominant-baseline="auto">fetch tweets</text>
+
+          <!-- Scraper → Discord (broken) -->
+          <line id="edge-scraper-discord" x1="340" y1="50%" x2="438" y2="50%" stroke="#f5b8c0" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-err)">
+            <animate attributeName="stroke-dashoffset" values="24;0" dur="1.4s" repeatCount="indefinite"/>
+          </line>
+          <text x="389" y="calc(50% - 10)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle">daily digest</text>
+
+          <!-- OpenClaw → Discord (ok) -->
+          <line id="edge-openclaw-discord" x1="570" y1="36%" x2="608" y2="36%" stroke="#b3e8ce" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-ok)">
+            <animate attributeName="stroke-dashoffset" values="24;0" dur="1s" repeatCount="indefinite"/>
+          </line>
+          <text x="620" y="calc(36% - 12)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle">replies</text>
+
+          <!-- Claude → OpenClaw (ok) -->
+          <line id="edge-claude-openclaw" x1="510" y1="68%" x2="510" y2="54%" stroke="#b3e8ce" stroke-width="2" marker-end="url(#arr-ok)"/>
+          <text x="524" y="calc(62%)" fill="#8c897f" font-size="10" font-family="DM Sans">inference</text>
+        </svg>
+
+        <!-- Nodes — positioned via % with absolute -->
+        <div class="fnode s-err"  id="fn-x"        style="left:3%;  top:50%;transform:translateY(-50%);width:110px" onclick="selectNode('x')">
+          <div class="fnode-dot err"></div><span class="fnode-icon">𝕏</span>
+          <div class="fnode-name">X / Twitter</div><div class="fnode-status err">RATE LIMITED</div>
+        </div>
+        <div class="fnode s-err"  id="fn-scraper"   style="left:28%; top:50%;transform:translateY(-50%);width:116px" onclick="selectNode('scraper')">
+          <div class="fnode-dot err"></div><span class="fnode-icon">⚙️</span>
+          <div class="fnode-name">News Scraper</div><div class="fnode-status err">FAILED</div>
+        </div>
+        <div class="fnode s-warn" id="fn-openclaw"  style="left:62%; top:30%;transform:translateY(-50%);width:112px" onclick="selectNode('openclaw')">
+          <div class="fnode-dot warn"></div><span class="fnode-icon">🦞</span>
+          <div class="fnode-name">OpenClaw</div><div class="fnode-status warn">DEGRADED</div>
+        </div>
+        <div class="fnode s-ok"   id="fn-discord"   style="left:80%; top:30%;transform:translateY(-50%);width:108px" onclick="selectNode('discord')">
+          <div class="fnode-dot ok"></div><span class="fnode-icon">💬</span>
+          <div class="fnode-name">Discord</div><div class="fnode-status ok">HEALTHY</div>
+        </div>
+        <div class="fnode s-ok"   id="fn-claude"    style="left:62%; top:70%;transform:translateY(-50%);width:112px" onclick="selectNode('claude')">
+          <div class="fnode-dot ok"></div><span class="fnode-icon">✦</span>
+          <div class="fnode-name">Claude API</div><div class="fnode-status ok">HEALTHY</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOG STRIP — collapsed by default -->
+    <div class="log-strip collapsed" id="logStrip">
+      <div class="log-strip-header" onclick="toggleLog()">
+        <div class="log-strip-title">
+          Event Log
+          <span class="log-err-count" id="errCount">3 errors</span>
+        </div>
+        <span class="log-toggle" id="logToggle">▲ expand</span>
+      </div>
+      <div class="log-body" id="logFeed"></div>
+    </div>
+
+  </main>
+
+  <!-- INSPECTOR -->
+  <aside class="inspector">
+    <div class="insp-top">
+      <div class="insp-eyebrow">Inspecting</div>
+      <div class="insp-node" id="inspName">🦞 OpenClaw</div>
+      <div class="insp-pill warn" id="inspPill"><span class="dot yellow"></span> DEGRADED</div>
+    </div>
+    <div class="insp-body" id="inspBody"></div>
+  </aside>
+
+</div>
+
+<script>
+const NODES = {
+  openclaw:{
+    name:"🦞 OpenClaw", status:"warn", label:"DEGRADED",
+    alert:null,
+    fixes:[
+      {type:"warn", text:"Gateway missed 2 heartbeats this hour. Check if it's still responding.", prompt:"My OpenClaw gateway missed 2 heartbeats and had a session reset at 09:31. Check if the gateway process is running, show me the last 20 lines of the log, and restart it if it looks stuck."},
+      {type:"warn", text:"Session context reset at 09:31. If it keeps happening, the gateway may need a restart.", prompt:"My OpenClaw agent had an unexpected session context reset at 09:31 today. Look at the logs around that time and tell me what caused it. Restart the gateway if needed."},
+      {type:"info", text:"Claude API is healthy — the issue is in OpenClaw itself, not upstream.", prompt:null},
+    ],
+    metrics:[
+      ["Sessions","3","🗂️","Active conversation sessions open right now"],
+      ["Memory","142 MB","🧠","RAM used by the OpenClaw process"],
+      ["Restarts","2","🔄","Times the agent restarted today"],
+      ["Tokens/hr","4.2K","⚡","Claude API tokens consumed per hour"],
+    ],
+    events:[
+      {time:"09:42",level:"warn", msg:"Heartbeat delayed 18s — gateway under load"},
+      {time:"09:31",level:"warn", msg:"Session context reset unexpectedly"},
+      {time:"09:18",level:"info", msg:"Agent started, memory loaded (142 MB)"},
+      {time:"09:02",level:"info", msg:"Discord gateway reconnected"},
+    ]
+  },
+  scraper:{
+    name:"⚙️ News Scraper", status:"err", label:"FAILED",
+    alert:"News Scraper has been failing for 41 minutes. Last successful run: 06:00.",
+    fixes:[
+      {type:"err",  text:"X API returned 429 — rate limit hit. Scraper will auto-retry at 12:00, no action needed unless it's urgent.", prompt:"My news scraper failed because X API returned 429 at 09:28. The rate limit should reset in about 18 minutes. Check if the scraper service is still running and confirm it's scheduled to retry at 12:00. Don't restart it early."},
+      {type:"warn", text:"Reduce scrape frequency from every 3h to every 6h to stay under your monthly limit.", prompt:"My X API scraper is hitting rate limits too often. Find the scraper config file and change the run frequency from every 3 hours to every 6 hours, then confirm the change."},
+      {type:"warn", text:"You've used 498K of 500K monthly tweets. Running low on quota.", prompt:null},
+    ],
+    metrics:[
+      ["Last run","09:28","🕐","Timestamp of the most recent run attempt"],
+      ["Runs today","1/3","📊","Completed vs scheduled runs today"],
+      ["Errors","2","❌","Failed attempts today"],
+      ["Next retry","12:00","⏰","Scheduled time for the next attempt"],
+    ],
+    events:[
+      {time:"09:28",level:"error",msg:"X API 429 — rate limit exceeded"},
+      {time:"09:27",level:"error",msg:"Retry 2/3 failed — still 429"},
+      {time:"09:20",level:"warn", msg:"Slow response from X endpoint (4.2s)"},
+      {time:"06:00",level:"info", msg:"Run succeeded — 14 tweets collected"},
+    ]
+  },
+  discord:{
+    name:"💬 Discord", status:"ok", label:"HEALTHY",
+    alert:null,
+    fixes:[],
+    metrics:[
+      ["Latency","42ms","📡","Round-trip time to Discord gateway"],
+      ["Messages","847","💬","Total messages sent today"],
+      ["Uptime","99.8%","✅","Gateway uptime over 30 days"],
+      ["Channels","4","#️⃣","Channels the bot is active in"],
+    ],
+    events:[
+      {time:"09:42",level:"info",msg:"Message delivered to #general"},
+      {time:"09:39",level:"info",msg:"Bot responded in 1.2s"},
+      {time:"09:20",level:"info",msg:"Reconnected to Discord gateway"},
+    ]
+  },
+  claude:{
+    name:"✦ Claude API", status:"ok", label:"HEALTHY",
+    alert:null,
+    fixes:[],
+    metrics:[
+      ["Latency","1.2s","⏱️","Average inference response time today"],
+      ["Tokens/day","28K","📈","Total tokens used in last 24h"],
+      ["Model","sonnet-4-6","🤖","Claude model currently in use"],
+      ["Errors","0","✅","API errors in the last hour"],
+    ],
+    events:[
+      {time:"09:42",level:"info",msg:"Inference OK — 847 tokens, 1240ms"},
+      {time:"09:38",level:"info",msg:"Inference OK — 1.2K tokens, 980ms"},
+      {time:"09:35",level:"info",msg:"Inference OK — 623 tokens, 1440ms"},
+    ]
+  },
+  x:{
+    name:"𝕏 X / Twitter", status:"err", label:"RATE LIMITED",
+    alert:"X API has been rate limited for 41 minutes. Scraper cannot fetch tweets until this resets.",
+    fixes:[
+      {type:"err",  text:"Rate limit resets in ~18 minutes. Scraper will auto-retry at 12:00 — no action needed.", prompt:null},
+      {type:"warn", text:"You've used 498K of 500K monthly tweets. Nearly at your limit.", prompt:"My X API usage is at 498K out of 500K monthly tweets. Find where my scraper config sets the monthly budget or run frequency and reduce it so I don't hit the limit again next month. Show me the change before applying it."},
+    ],
+    metrics:[
+      ["Status","429","🚫","Current HTTP status from X API"],
+      ["Resets in","18min","⏳","Time until rate limit window resets"],
+      ["Limit","500K/mo","📋","Monthly fetch limit on your plan"],
+      ["Used","498K","📉","Tweets fetched this billing month"],
+    ],
+    events:[
+      {time:"09:28",level:"error",msg:"429 Too Many Requests from /v2/tweets/search"},
+      {time:"09:20",level:"warn", msg:"Approaching rate limit (97% used)"},
+      {time:"06:00",level:"info", msg:"API call succeeded — 14 results"},
+    ]
+  }
+};
+
+const ALL_LOGS = [
+  {time:"09:42:11",node:"scraper",cls:"scraper",level:"error",msg:"X API 429 — Rate limit exceeded for /v2/tweets/search/recent"},
+  {time:"09:41:58",node:"openclaw",cls:"openclaw",level:"warn",msg:"Heartbeat delayed 18s — gateway under load"},
+  {time:"09:39:01",node:"discord",cls:"discord",level:"info",msg:"Message delivered to #general (42ms)"},
+  {time:"09:35:44",node:"claude",cls:"claude",level:"info",msg:"Inference OK — 1240ms, 847 tokens"},
+  {time:"09:31:22",node:"openclaw",cls:"openclaw",level:"warn",msg:"Session context reset (session ID: a3f2b1)"},
+  {time:"09:28:05",node:"scraper",cls:"scraper",level:"error",msg:"Retry 2/3 failed — X API still 429"},
+  {time:"09:27:40",node:"scraper",cls:"scraper",level:"error",msg:"Retry 1/3 failed — X API 429"},
+  {time:"09:20:00",node:"discord",cls:"discord",level:"info",msg:"Bot reconnected to Discord gateway"},
+  {time:"09:18:33",node:"openclaw",cls:"openclaw",level:"info",msg:"Agent started, MEMORY.md loaded (142 MB)"},
+  {time:"06:00:01",node:"scraper",cls:"scraper",level:"info",msg:"Run succeeded — 14 tweets collected"},
+];
+
+let logExpanded = false;
+const statusCycle = {ok:'warn', warn:'err', err:'ok'};
+const statusLabel = {ok:'HEALTHY', warn:'DEGRADED', err:'FAILED'};
+const statusBadge = {ok:'OK', warn:'WARN', err:'FAIL'};
+const dotClass    = {ok:'green', warn:'yellow', err:'red'};
+
+// clock
+setInterval(()=>{ document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false}); }, 1000);
+document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
+
+// log toggle
+function toggleLog() {
+  logExpanded = !logExpanded;
+  document.getElementById('logStrip').className = 'log-strip ' + (logExpanded ? 'expanded' : 'collapsed');
+  document.getElementById('logToggle').textContent = logExpanded ? '▼ collapse' : '▲ expand';
+}
+
+function renderLogs() {
+  const errCount = ALL_LOGS.filter(l=>l.level==='error').length;
+  document.getElementById('errCount').textContent = errCount + ' error' + (errCount!==1?'s':'');
+  document.getElementById('logFeed').innerHTML = ALL_LOGS.map(l=>`
+    <div class="log-row ${l.level==='error'?'err-row':l.level==='warn'?'warn-row':''}" onclick="selectNode('${l.node}')">
+      <span class="log-t">${l.time}</span>
+      <span class="log-n ${l.cls}">${l.node}</span>
+      <span class="log-lv ${l.level}">${l.level==='error'?'ERR':l.level.toUpperCase()}</span>
+      <span class="log-msg">${l.msg}</span>
+    </div>`).join('');
+}
+
+function selectNode(id) {
+  // sidebar
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const order = ['openclaw','discord','claude','scraper','x'];
+  const navItems = document.querySelectorAll('.nav-item');
+  const i = order.indexOf(id);
+  if (navItems[i]) navItems[i].classList.add('active');
+
+  // flow nodes
+  document.querySelectorAll('.fnode').forEach(n=>n.classList.remove('selected'));
+  const fn = document.getElementById('fn-'+id);
+  if (fn) fn.classList.add('selected');
+
+  renderInspector(id);
+}
+
+function renderInspector(id) {
+  const n = NODES[id];
+  document.getElementById('inspName').textContent = n.name;
+  const pill = document.getElementById('inspPill');
+  pill.className = `insp-pill ${n.status}`;
+  pill.innerHTML = `<span class="dot ${dotClass[n.status]}"></span> ${n.label}`;
+
+  document.getElementById('inspBody').innerHTML = `
+    ${n.alert ? `<div class="alert-bar"><span class="alert-bar-icon">⚠</span><span>${n.alert}</span></div>` : ''}
+
+    ${n.fixes.length > 0 ? `
+      <div class="fixes-section">
+        <div class="insp-label">✦ Ask Claude Code</div>
+        ${n.fixes.map((f,i)=>`
+          <div class="fix-card ${f.type}">
+            <span class="fix-num">${i+1}.</span>${f.text}
+            ${f.prompt ? `
+              <div class="prompt-block" onclick="copyPrompt(this)" data-prompt="${f.prompt.replace(/"/g,'&quot;')}">
+                <div class="prompt-label">✦ Claude Code prompt</div>
+                ${f.prompt}
+                <span class="prompt-copy-btn">Copy prompt</span>
+              </div>` : ''}
+          </div>`).join('')}
+      </div>
+    ` : `
+      <div class="no-issues">
+        <div style="font-size:24px;margin-bottom:6px">✓</div>
+        <div style="font-size:12px;color:var(--green);font-weight:600">No issues detected</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">Checked a few seconds ago</div>
+      </div>
+    `}
+
+    <div class="metrics-section">
+      <div class="insp-label">Metrics</div>
+      <div class="metrics-grid">
+        ${n.metrics.map(([l,v,icon,tip])=>`
+          <div class="metric-cell">
+            <div class="metric-info">i<div class="metric-tooltip">${tip}</div></div>
+            <span class="metric-icon">${icon}</span>
+            <div class="metric-v">${v}</div>
+            <div class="metric-l">${l}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="events-section">
+      <div class="insp-label">Recent Events</div>
+      ${n.events.map(e=>`
+        <div class="ev-row">
+          <span class="ev-t">${e.time}</span>
+          <span class="ev-lv ${e.level}">${e.level.toUpperCase()}</span>
+          <span class="ev-msg">${e.msg}</span>
+        </div>`).join('')}
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Simulate</div>
+      <button class="sim-btn" onclick="cycleStatus('${id}')">Cycle status →</button>
+    </div>`;
+}
+
+function copyPrompt(el) {
+  const prompt = el.getAttribute('data-prompt');
+  navigator.clipboard.writeText(prompt).catch(()=>{});
+  const btn = el.querySelector('.prompt-copy-btn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Copied!';
+  btn.style.background = 'var(--green)';
+  btn.style.color = 'white';
+  btn.style.borderColor = 'var(--green)';
+  setTimeout(()=>{
+    btn.textContent = orig;
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }, 2000);
+}
+
+function cycleStatus(id) {
+  const n = NODES[id];
+  n.status = statusCycle[n.status];
+  n.label  = statusLabel[n.status];
+
+  const sb = document.getElementById(`sb-${id}`);
+  if (sb) { sb.className = `status-badge ${n.status}`; sb.textContent = statusBadge[n.status]; }
+
+  const fn = document.getElementById('fn-'+id);
+  if (fn) {
+    fn.className = `fnode s-${n.status} selected`;
+    const dot = fn.querySelector('.fnode-dot');
+    const st  = fn.querySelector('.fnode-status');
+    if (dot) dot.className = `fnode-dot ${n.status}`;
+    if (st)  { st.className = `fnode-status ${n.status}`; st.textContent = n.label; }
+  }
+
+  const errors = Object.values(NODES).filter(x=>x.status==='err').length;
+  const warns  = Object.values(NODES).filter(x=>x.status==='warn').length;
+  const chip = document.getElementById('sysChip');
+  const sysDot = document.getElementById('sysDot');
+  const sysLbl = document.getElementById('sysLabel');
+  if (errors > 0) {
+    chip.className='status-chip err'; sysDot.className='dot red';
+    sysLbl.textContent = `${errors} issue${errors>1?'s':''} detected`;
+  } else if (warns > 0) {
+    chip.className='status-chip warn'; sysDot.className='dot yellow';
+    sysLbl.textContent = `${warns} warning${warns>1?'s':''}`;
+  } else {
+    chip.className='status-chip ok'; sysDot.className='dot green';
+    sysLbl.textContent = 'All systems go';
+  }
+
+  renderInspector(id);
+}
+
+// live log feed
+const liveMsgs = [
+  {node:'claude',cls:'claude',level:'info',msg:'Inference OK — 723 tokens, 1180ms'},
+  {node:'discord',cls:'discord',level:'info',msg:'Message delivered to #general (38ms)'},
+  {node:'openclaw',cls:'openclaw',level:'info',msg:'Agent heartbeat OK'},
+  {node:'openclaw',cls:'openclaw',level:'warn',msg:'Slow response — 3.1s to Discord'},
+  {node:'claude',cls:'claude',level:'info',msg:'Inference OK — 1.1K tokens, 940ms'},
+];
+let li = 0;
+setInterval(()=>{
+  const ts = new Date().toLocaleTimeString('en-US',{hour12:false});
+  ALL_LOGS.unshift({time:ts, ...liveMsgs[li % liveMsgs.length]});
+  li++;
+  if (ALL_LOGS.length > 20) ALL_LOGS.pop();
+  renderLogs();
+}, 4000);
+
+// init
+renderLogs();
+renderInspector('openclaw');
+selectNode('openclaw');
+</script>
+</body>
+</html>
