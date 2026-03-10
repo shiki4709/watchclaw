@@ -132,12 +132,7 @@
     border-radius: 12px; position: relative; overflow: hidden;
     box-shadow: var(--shadow); min-height: 0;
   }
-  .flow-canvas::before {
-    content: ''; position: absolute; inset: 0;
-    background-image: radial-gradient(circle, var(--border2) 1px, transparent 1px);
-    background-size: 28px 28px; opacity: 0.45;
-  }
-  .flow-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .flow-canvas .react-flow { border-radius: 12px; }
 
   .fnode {
     position: absolute; background: var(--surface); border: 1.5px solid var(--border2);
@@ -340,7 +335,58 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  /* ── REACT FLOW CUSTOM NODES ── */
+  .react-flow__node-statusNode { background: none !important; padding: 0 !important; border: none !important; border-radius: 0 !important; }
+  .rf-node {
+    background: var(--surface); border: 1.5px solid var(--border2);
+    border-radius: 12px; padding: 12px 16px; text-align: center;
+    min-width: 104px; box-shadow: var(--shadow); cursor: pointer;
+    transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+    position: relative;
+  }
+  .rf-node:hover { box-shadow: var(--shadow-md); }
+  .react-flow__node.selected .rf-node { border-color: var(--ink); box-shadow: 0 0 0 2.5px rgba(26,25,21,0.15), var(--shadow-md); }
+  .rf-node.s-ok   { border-color: var(--green-border);  background: var(--green-bg); }
+  .rf-node.s-warn { border-color: var(--yellow-border); background: var(--yellow-bg); }
+  .rf-node.s-err  { border-color: var(--red-border);    background: var(--red-bg); }
+  .rf-node-dot {
+    position: absolute; top: 7px; right: 7px;
+    width: 8px; height: 8px; border-radius: 50%; border: 2px solid white;
+  }
+  .rf-node-dot.green  { background: var(--green); }
+  .rf-node-dot.red    { background: var(--red);   animation: blink .8s step-end infinite; }
+  .rf-node-dot.yellow { background: #d4a017;      animation: blink 1.4s step-end infinite; }
+  .rf-node-icon   { font-size: 22px; display: block; margin-bottom: 4px; }
+  .rf-node-name   { font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+  .rf-node-badge  { font-size: 9px; font-weight: 700; margin-top: 3px; letter-spacing: 0.04em; }
+  .rf-node-badge.ok   { color: var(--green); }
+  .rf-node-badge.warn { color: var(--yellow); }
+  .rf-node-badge.err  { color: var(--red); }
+  .rf-handle { opacity: 0 !important; width: 1px !important; height: 1px !important; min-width: 0 !important; min-height: 0 !important; }
+
+  /* React Flow edge labels */
+  .react-flow__edge-text { font-family: 'DM Sans', sans-serif !important; }
+
+  /* Stale data banner */
+  .stale-banner {
+    display: none; background: var(--yellow-bg); border-bottom: 1px solid var(--yellow-border);
+    padding: 6px 20px; font-size: 11px; font-weight: 500; color: var(--yellow);
+    text-align: center;
+  }
+  .stale-banner.visible { display: block; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12/dist/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+    "@xyflow/react": "https://esm.sh/@xyflow/react@12?external=react,react-dom"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -353,6 +399,8 @@
   </div>
   <div class="clock" id="clock">--:--:--</div>
 </header>
+
+<div class="stale-banner" id="staleBanner">Data may be stale — last update <span id="staleAge">?</span> minutes ago</div>
 
 <div class="layout">
 
@@ -414,55 +462,7 @@
     <div class="flow-section">
       <div class="section-label">Architecture Flow <span></span></div>
       <div class="flow-canvas" id="flowCanvas">
-        <svg class="flow-svg" viewBox="0 0 740 100%" preserveAspectRatio="xMidYMid meet" id="flowSvg">
-          <defs>
-            <marker id="arr-ok"  markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#b3e8ce"/></marker>
-            <marker id="arr-err" markerWidth="7" markerHeight="7" refX="3" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#f5b8c0"/></marker>
-          </defs>
-          <!-- X → Scraper (broken) -->
-          <line id="edge-x-scraper" x1="120" y1="50%" x2="218" y2="50%" stroke="#f5b8c0" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-err)">
-            <animate attributeName="stroke-dashoffset" values="24;0" dur="1.4s" repeatCount="indefinite"/>
-          </line>
-          <text id="lbl-x-scraper" x="169" y="calc(50% - 10)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle" dominant-baseline="auto">fetch tweets</text>
-
-          <!-- Scraper → Discord (broken) -->
-          <line id="edge-scraper-discord" x1="340" y1="50%" x2="438" y2="50%" stroke="#f5b8c0" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-err)">
-            <animate attributeName="stroke-dashoffset" values="24;0" dur="1.4s" repeatCount="indefinite"/>
-          </line>
-          <text x="389" y="calc(50% - 10)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle">daily digest</text>
-
-          <!-- OpenClaw → Discord (ok) -->
-          <line id="edge-openclaw-discord" x1="570" y1="36%" x2="608" y2="36%" stroke="#b3e8ce" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arr-ok)">
-            <animate attributeName="stroke-dashoffset" values="24;0" dur="1s" repeatCount="indefinite"/>
-          </line>
-          <text x="620" y="calc(36% - 12)" fill="#8c897f" font-size="10" font-family="DM Sans" text-anchor="middle">replies</text>
-
-          <!-- Claude → OpenClaw (ok) -->
-          <line id="edge-claude-openclaw" x1="510" y1="68%" x2="510" y2="54%" stroke="#b3e8ce" stroke-width="2" marker-end="url(#arr-ok)"/>
-          <text x="524" y="calc(62%)" fill="#8c897f" font-size="10" font-family="DM Sans">inference</text>
-        </svg>
-
-        <!-- Nodes — positioned via % with absolute -->
-        <div class="fnode s-err"  id="fn-x"        style="left:3%;  top:50%;transform:translateY(-50%);width:110px" onclick="selectNode('x')">
-          <div class="fnode-dot err"></div><span class="fnode-icon">𝕏</span>
-          <div class="fnode-name">X / Twitter</div><div class="fnode-status err">RATE LIMITED</div>
-        </div>
-        <div class="fnode s-err"  id="fn-scraper"   style="left:28%; top:50%;transform:translateY(-50%);width:116px" onclick="selectNode('scraper')">
-          <div class="fnode-dot err"></div><span class="fnode-icon">⚙️</span>
-          <div class="fnode-name">News Scraper</div><div class="fnode-status err">FAILED</div>
-        </div>
-        <div class="fnode s-warn" id="fn-openclaw"  style="left:62%; top:30%;transform:translateY(-50%);width:112px" onclick="selectNode('openclaw')">
-          <div class="fnode-dot warn"></div><span class="fnode-icon">🦞</span>
-          <div class="fnode-name">OpenClaw</div><div class="fnode-status warn">DEGRADED</div>
-        </div>
-        <div class="fnode s-ok"   id="fn-discord"   style="left:80%; top:30%;transform:translateY(-50%);width:108px" onclick="selectNode('discord')">
-          <div class="fnode-dot ok"></div><span class="fnode-icon">💬</span>
-          <div class="fnode-name">Discord</div><div class="fnode-status ok">HEALTHY</div>
-        </div>
-        <div class="fnode s-ok"   id="fn-claude"    style="left:62%; top:70%;transform:translateY(-50%);width:112px" onclick="selectNode('claude')">
-          <div class="fnode-dot ok"></div><span class="fnode-icon">✦</span>
-          <div class="fnode-name">Claude API</div><div class="fnode-status ok">HEALTHY</div>
-        </div>
+        <div id="react-flow-root" style="width:100%;height:100%"></div>
       </div>
     </div>
 
@@ -755,35 +755,7 @@ function updateUI() {
 }
 
 function updateFlowNodes() {
-  for (const [id, n] of Object.entries(NODES)) {
-    const fn = document.getElementById('fn-' + id);
-    if (!fn) continue;
-
-    const isSelected = fn.classList.contains('selected');
-    fn.className = `fnode s-${n.status}${isSelected ? ' selected' : ''}`;
-
-    const dot = fn.querySelector('.fnode-dot');
-    if (dot) dot.className = `fnode-dot ${n.status}`;
-
-    const st = fn.querySelector('.fnode-status');
-    if (st) { st.className = `fnode-status ${n.status}`; st.textContent = n.label; }
-  }
-
-  // Update edges based on status
-  const edges = [
-    ['edge-openclaw-discord', NODES.openclaw.status],
-    ['edge-claude-openclaw',  NODES.openclaw.status],
-    ['edge-x-scraper',        NODES.x.status],
-    ['edge-scraper-discord',  NODES.scraper.status],
-  ];
-  for (const [edgeId, st] of edges) {
-    const el = document.getElementById(edgeId);
-    if (!el) continue;
-    const col = st === 'ok' ? '#b3e8ce' : st === 'warn' ? '#f5dfa0' : '#f5b8c0';
-    const marker = st === 'ok' ? 'url(#arr-ok)' : 'url(#arr-err)';
-    el.setAttribute('stroke', col);
-    el.setAttribute('marker-end', marker);
-  }
+  if (window.updateReactFlow) window.updateReactFlow(NODES, selectedNodeId);
 }
 
 function updateSidebarBadges() {
@@ -806,13 +778,32 @@ function updateSidebarBadges() {
   }
 }
 
+function isDataStale() {
+  if (!lastFetchTime) return false;
+  return (Date.now() - lastFetchTime.getTime()) > 120000; // 2 minutes
+}
+
+function updateStaleBanner() {
+  const banner = document.getElementById('staleBanner');
+  const stale = isDataStale();
+  banner.classList.toggle('visible', stale);
+  if (stale && lastFetchTime) {
+    document.getElementById('staleAge').textContent = Math.round((Date.now() - lastFetchTime.getTime()) / 60000);
+  }
+}
+
 function updateSystemChip() {
+  const stale = isDataStale();
   const errors = Object.values(NODES).filter(x => x.status === 'err').length;
   const warns  = Object.values(NODES).filter(x => x.status === 'warn').length;
   const chip = document.getElementById('sysChip');
   const sysDot = document.getElementById('sysDot');
   const sysLbl = document.getElementById('sysLabel');
-  if (errors > 0) {
+
+  if (stale) {
+    chip.className = 'status-chip warn'; sysDot.className = 'dot yellow';
+    sysLbl.textContent = 'Data may be stale';
+  } else if (errors > 0) {
     chip.className = 'status-chip err'; sysDot.className = 'dot red';
     sysLbl.textContent = errors + ' issue' + (errors > 1 ? 's' : '') + ' detected';
   } else if (warns > 0) {
@@ -822,6 +813,7 @@ function updateSystemChip() {
     chip.className = 'status-chip ok'; sysDot.className = 'dot green';
     sysLbl.textContent = 'All systems go';
   }
+  updateStaleBanner();
 }
 
 function updateSidebarBoxes() {
@@ -860,11 +852,11 @@ function updateSidebarBoxes() {
 // ── CLOCK ─────────────────────────────────────────────────────────────────────
 setInterval(() => {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
-  // Update "Xs ago" in heartbeat box
   if (lastFetchOk && lastFetchTime) {
     const ago = Math.round((Date.now() - lastFetchTime.getTime()) / 1000);
     document.getElementById('hbSub').textContent = 'Last poll ' + ago + 's ago';
   }
+  updateSystemChip(); // re-check stale state every second
 }, 1000);
 document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
 
@@ -907,9 +899,7 @@ function selectNode(id) {
   const navItems = document.querySelectorAll('.nav-item');
   const i = order.indexOf(id);
   if (navItems[i]) navItems[i].classList.add('active');
-  document.querySelectorAll('.fnode').forEach(n => n.classList.remove('selected'));
-  const fn = document.getElementById('fn-' + id);
-  if (fn) fn.classList.add('selected');
+  if (window.updateReactFlow) window.updateReactFlow(NODES, selectedNodeId);
   renderInspector(id);
 }
 
@@ -989,10 +979,140 @@ function copyPrompt(el) {
 }
 
 // ── INIT & POLLING ────────────────────────────────────────────────────────────
+// Expose state for the React Flow module (loads after this script)
+window._watchclawNodes = NODES;
+window._watchclawSelectedId = selectedNodeId;
+
+// Patch selectNode to keep the bridge vars in sync
+const _origSelectNode = selectNode;
+window.selectNode = function(id) {
+  window._watchclawSelectedId = id;
+  _origSelectNode(id);
+};
+
 fetchStatus();
 setInterval(fetchStatus, POLL_INTERVAL);
 selectNode('openclaw');
 renderLogs();
+</script>
+
+<!-- React Flow module — loaded after vanilla JS is ready -->
+<script type="module">
+import React, { createElement as h, useState, useCallback, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ReactFlow, Background, Handle, Position, MarkerType } from '@xyflow/react';
+
+const DOT = { ok: 'green', warn: 'yellow', err: 'red' };
+
+function StatusNode({ data }) {
+  return h('div', { className: 'rf-node s-' + data.status },
+    h(Handle, { type: 'target', position: Position.Left, id: 'left', className: 'rf-handle' }),
+    h(Handle, { type: 'target', position: Position.Bottom, id: 'bottom', className: 'rf-handle' }),
+    h('div', { className: 'rf-node-dot ' + (DOT[data.status] || 'red') }),
+    h('span', { className: 'rf-node-icon' }, data.emoji),
+    h('div', { className: 'rf-node-name' }, data.name),
+    h('div', { className: 'rf-node-badge ' + data.status }, data.label),
+    h(Handle, { type: 'source', position: Position.Right, id: 'right', className: 'rf-handle' }),
+    h(Handle, { type: 'source', position: Position.Top, id: 'top', className: 'rf-handle' })
+  );
+}
+
+const nodeTypes = { statusNode: StatusNode };
+
+const INIT_NODES = [
+  { id: 'x',        type: 'statusNode', position: { x: 0,   y: 0 },   data: { emoji: '\ud835\udd4f',  name: 'X / Twitter',   status: 'ok', label: 'HEALTHY' } },
+  { id: 'scraper',  type: 'statusNode', position: { x: 230, y: 0 },   data: { emoji: '\u2699\ufe0f', name: 'News Scraper',  status: 'ok', label: 'HEALTHY' } },
+  { id: 'discord',  type: 'statusNode', position: { x: 490, y: 0 },   data: { emoji: '\ud83d\udcac', name: 'Discord',       status: 'ok', label: 'HEALTHY' } },
+  { id: 'claude',   type: 'statusNode', position: { x: 60,  y: 170 }, data: { emoji: '\u2726',  name: 'Claude API',    status: 'ok', label: 'HEALTHY' } },
+  { id: 'openclaw', type: 'statusNode', position: { x: 320, y: 170 }, data: { emoji: '\ud83e\udd9e', name: 'OpenClaw',      status: 'ok', label: 'CONNECTING\u2026' } },
+];
+
+function makeEdge(id, source, target, label, sourceHandle, targetHandle) {
+  return {
+    id, source, target, label,
+    sourceHandle: sourceHandle || 'right',
+    targetHandle: targetHandle || 'left',
+    type: 'smoothstep',
+    animated: true,
+    style: { stroke: '#b3e8ce', strokeWidth: 2 },
+    labelStyle: { fontSize: 10, fill: '#8c897f', fontFamily: 'DM Sans, sans-serif' },
+    labelBgStyle: { fill: '#ffffff', fillOpacity: 0.85 },
+    labelBgPadding: [4, 2],
+    labelBgBorderRadius: 3,
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#b3e8ce', width: 14, height: 14 },
+  };
+}
+
+const INIT_EDGES = [
+  makeEdge('e-x-scraper',        'x',        'scraper',  'fetch tweets'),
+  makeEdge('e-scraper-discord',  'scraper',  'discord',  'daily digest'),
+  makeEdge('e-openclaw-discord', 'openclaw', 'discord',  'replies',    'top', 'bottom'),
+  makeEdge('e-claude-openclaw',  'claude',   'openclaw', 'inference'),
+];
+
+function FlowDiagram() {
+  const [nodes, setNodes] = useState(INIT_NODES);
+  const [edges, setEdges] = useState(INIT_EDGES);
+
+  useEffect(() => {
+    window.updateReactFlow = function(nodesData, selectedId) {
+      setNodes(prev => prev.map(n => ({
+        ...n,
+        selected: n.id === selectedId,
+        data: {
+          ...n.data,
+          status: nodesData[n.id] ? nodesData[n.id].status : n.data.status,
+          label:  nodesData[n.id] ? nodesData[n.id].label  : n.data.label,
+        }
+      })));
+
+      setEdges(prev => prev.map(e => {
+        const srcStatus = nodesData[e.source] ? nodesData[e.source].status : 'ok';
+        const color = srcStatus === 'ok' ? '#b3e8ce' : srcStatus === 'warn' ? '#f5dfa0' : '#f5b8c0';
+        return {
+          ...e,
+          style: { ...e.style, stroke: color },
+          markerEnd: { ...e.markerEnd, color },
+        };
+      }));
+    };
+
+    // Sync with vanilla JS state that loaded before this module
+    const nd = window._watchclawNodes;
+    const sel = window._watchclawSelectedId || 'openclaw';
+    if (nd && Object.keys(nd).length > 0) {
+      window.updateReactFlow(nd, sel);
+    }
+
+    return () => { delete window.updateReactFlow; };
+  }, []);
+
+  const onNodeClick = useCallback((_, node) => {
+    if (window.selectNode) window.selectNode(node.id);
+  }, []);
+
+  return h(ReactFlow, {
+    nodes, edges, nodeTypes, onNodeClick,
+    fitView: true,
+    fitViewOptions: { padding: 0.25 },
+    nodesDraggable: false,
+    nodesConnectable: false,
+    elementsSelectable: true,
+    panOnDrag: false,
+    zoomOnScroll: false,
+    zoomOnPinch: false,
+    zoomOnDoubleClick: false,
+    preventScrolling: false,
+    proOptions: { hideAttribution: true },
+    minZoom: 0.5,
+    maxZoom: 1.5,
+  },
+    h(Background, { variant: 'dots', gap: 28, size: 1, color: '#d0cec6' })
+  );
+}
+
+const root = createRoot(document.getElementById('react-flow-root'));
+root.render(h(FlowDiagram));
 </script>
 </body>
 </html>
