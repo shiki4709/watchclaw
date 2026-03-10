@@ -98,13 +98,22 @@
   .sidebar-divider { height: 1px; background: var(--border); margin: 4px 14px; }
 
   .heartbeat-box {
-    margin: 10px 12px 14px;
+    margin: 10px 12px 6px;
     padding: 10px 12px;
     background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
   }
   .heartbeat-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
   .heartbeat-val { font-size: 12px; font-weight: 600; color: var(--green); }
   .heartbeat-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .gateway-box {
+    margin: 0 12px 14px;
+    padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .gateway-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .gateway-val { font-size: 12px; font-weight: 600; }
+  .gateway-detail { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
   /* ── MAIN ── */
   .main { display: flex; flex-direction: column; overflow: hidden; }
@@ -388,8 +397,13 @@
 
     <div class="heartbeat-box">
       <div class="heartbeat-label">Collector heartbeat</div>
-      <div class="heartbeat-val">● Live</div>
-      <div class="heartbeat-sub">Last ping 6s ago</div>
+      <div class="heartbeat-val" id="hbVal">● Connecting…</div>
+      <div class="heartbeat-sub" id="hbSub">—</div>
+    </div>
+    <div class="gateway-box">
+      <div class="gateway-label">Gateway health</div>
+      <div class="gateway-val" id="gwVal">● Checking…</div>
+      <div class="gateway-detail" id="gwDetail">—</div>
     </div>
   </aside>
 
@@ -479,126 +493,382 @@
 </div>
 
 <script>
+// ── CONFIGURATION ─────────────────────────────────────────────────────────────
+const API_URL = 'http://localhost:3001';
+const POLL_INTERVAL = 30000;
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let lastFetchOk = false;
+let lastFetchTime = null;
+let selectedNodeId = 'openclaw';
+let gatewayData = null;    // latest /gateway response
+let seenEventIds = new Set();
+
 const NODES = {
-  openclaw:{
-    name:"🦞 OpenClaw", status:"warn", label:"DEGRADED",
-    alert:null,
-    fixes:[
-      {type:"warn", text:"Gateway missed 2 heartbeats this hour. Check if it's still responding.", prompt:"My OpenClaw gateway missed 2 heartbeats and had a session reset at 09:31. Check if the gateway process is running, show me the last 20 lines of the log, and restart it if it looks stuck."},
-      {type:"warn", text:"Session context reset at 09:31. If it keeps happening, the gateway may need a restart.", prompt:"My OpenClaw agent had an unexpected session context reset at 09:31 today. Look at the logs around that time and tell me what caused it. Restart the gateway if needed."},
-      {type:"info", text:"Claude API is healthy — the issue is in OpenClaw itself, not upstream.", prompt:null},
-    ],
-    metrics:[
-      ["Sessions","3","🗂️","Active conversation sessions open right now"],
-      ["Memory","142 MB","🧠","RAM used by the OpenClaw process"],
-      ["Restarts","2","🔄","Times the agent restarted today"],
-      ["Tokens/hr","4.2K","⚡","Claude API tokens consumed per hour"],
-    ],
-    events:[
-      {time:"09:42",level:"warn", msg:"Heartbeat delayed 18s — gateway under load"},
-      {time:"09:31",level:"warn", msg:"Session context reset unexpectedly"},
-      {time:"09:18",level:"info", msg:"Agent started, memory loaded (142 MB)"},
-      {time:"09:02",level:"info", msg:"Discord gateway reconnected"},
-    ]
-  },
-  scraper:{
-    name:"⚙️ News Scraper", status:"err", label:"FAILED",
-    alert:"News Scraper has been failing for 41 minutes. Last successful run: 06:00.",
-    fixes:[
-      {type:"err",  text:"X API returned 429 — rate limit hit. Scraper will auto-retry at 12:00, no action needed unless it's urgent.", prompt:"My news scraper failed because X API returned 429 at 09:28. The rate limit should reset in about 18 minutes. Check if the scraper service is still running and confirm it's scheduled to retry at 12:00. Don't restart it early."},
-      {type:"warn", text:"Reduce scrape frequency from every 3h to every 6h to stay under your monthly limit.", prompt:"My X API scraper is hitting rate limits too often. Find the scraper config file and change the run frequency from every 3 hours to every 6 hours, then confirm the change."},
-      {type:"warn", text:"You've used 498K of 500K monthly tweets. Running low on quota.", prompt:null},
-    ],
-    metrics:[
-      ["Last run","09:28","🕐","Timestamp of the most recent run attempt"],
-      ["Runs today","1/3","📊","Completed vs scheduled runs today"],
-      ["Errors","2","❌","Failed attempts today"],
-      ["Next retry","12:00","⏰","Scheduled time for the next attempt"],
-    ],
-    events:[
-      {time:"09:28",level:"error",msg:"X API 429 — rate limit exceeded"},
-      {time:"09:27",level:"error",msg:"Retry 2/3 failed — still 429"},
-      {time:"09:20",level:"warn", msg:"Slow response from X endpoint (4.2s)"},
-      {time:"06:00",level:"info", msg:"Run succeeded — 14 tweets collected"},
-    ]
-  },
-  discord:{
-    name:"💬 Discord", status:"ok", label:"HEALTHY",
-    alert:null,
-    fixes:[],
-    metrics:[
-      ["Latency","42ms","📡","Round-trip time to Discord gateway"],
-      ["Messages","847","💬","Total messages sent today"],
-      ["Uptime","99.8%","✅","Gateway uptime over 30 days"],
-      ["Channels","4","#️⃣","Channels the bot is active in"],
-    ],
-    events:[
-      {time:"09:42",level:"info",msg:"Message delivered to #general"},
-      {time:"09:39",level:"info",msg:"Bot responded in 1.2s"},
-      {time:"09:20",level:"info",msg:"Reconnected to Discord gateway"},
-    ]
-  },
-  claude:{
-    name:"✦ Claude API", status:"ok", label:"HEALTHY",
-    alert:null,
-    fixes:[],
-    metrics:[
-      ["Latency","1.2s","⏱️","Average inference response time today"],
-      ["Tokens/day","28K","📈","Total tokens used in last 24h"],
-      ["Model","sonnet-4-6","🤖","Claude model currently in use"],
-      ["Errors","0","✅","API errors in the last hour"],
-    ],
-    events:[
-      {time:"09:42",level:"info",msg:"Inference OK — 847 tokens, 1240ms"},
-      {time:"09:38",level:"info",msg:"Inference OK — 1.2K tokens, 980ms"},
-      {time:"09:35",level:"info",msg:"Inference OK — 623 tokens, 1440ms"},
-    ]
-  },
-  x:{
-    name:"𝕏 X / Twitter", status:"err", label:"RATE LIMITED",
-    alert:"X API has been rate limited for 41 minutes. Scraper cannot fetch tweets until this resets.",
-    fixes:[
-      {type:"err",  text:"Rate limit resets in ~18 minutes. Scraper will auto-retry at 12:00 — no action needed.", prompt:null},
-      {type:"warn", text:"You've used 498K of 500K monthly tweets. Nearly at your limit.", prompt:"My X API usage is at 498K out of 500K monthly tweets. Find where my scraper config sets the monthly budget or run frequency and reduce it so I don't hit the limit again next month. Show me the change before applying it."},
-    ],
-    metrics:[
-      ["Status","429","🚫","Current HTTP status from X API"],
-      ["Resets in","18min","⏳","Time until rate limit window resets"],
-      ["Limit","500K/mo","📋","Monthly fetch limit on your plan"],
-      ["Used","498K","📉","Tweets fetched this billing month"],
-    ],
-    events:[
-      {time:"09:28",level:"error",msg:"429 Too Many Requests from /v2/tweets/search"},
-      {time:"09:20",level:"warn", msg:"Approaching rate limit (97% used)"},
-      {time:"06:00",level:"info", msg:"API call succeeded — 14 results"},
-    ]
-  }
+  openclaw: { name:"🦞 OpenClaw", status:"ok", label:"CONNECTING…", alert:null, fixes:[], metrics:[], events:[] },
+  discord:  { name:"💬 Discord",  status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
+  claude:   { name:"✦ Claude API",status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
+  scraper:  { name:"⚙️ News Scraper", status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
+  x:        { name:"𝕏 X / Twitter",   status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
 };
 
-const ALL_LOGS = [
-  {time:"09:42:11",node:"scraper",cls:"scraper",level:"error",msg:"X API 429 — Rate limit exceeded for /v2/tweets/search/recent"},
-  {time:"09:41:58",node:"openclaw",cls:"openclaw",level:"warn",msg:"Heartbeat delayed 18s — gateway under load"},
-  {time:"09:39:01",node:"discord",cls:"discord",level:"info",msg:"Message delivered to #general (42ms)"},
-  {time:"09:35:44",node:"claude",cls:"claude",level:"info",msg:"Inference OK — 1240ms, 847 tokens"},
-  {time:"09:31:22",node:"openclaw",cls:"openclaw",level:"warn",msg:"Session context reset (session ID: a3f2b1)"},
-  {time:"09:28:05",node:"scraper",cls:"scraper",level:"error",msg:"Retry 2/3 failed — X API still 429"},
-  {time:"09:27:40",node:"scraper",cls:"scraper",level:"error",msg:"Retry 1/3 failed — X API 429"},
-  {time:"09:20:00",node:"discord",cls:"discord",level:"info",msg:"Bot reconnected to Discord gateway"},
-  {time:"09:18:33",node:"openclaw",cls:"openclaw",level:"info",msg:"Agent started, MEMORY.md loaded (142 MB)"},
-  {time:"06:00:01",node:"scraper",cls:"scraper",level:"info",msg:"Run succeeded — 14 tweets collected"},
-];
-
+const ALL_LOGS = [];
 let logExpanded = false;
-const statusCycle = {ok:'warn', warn:'err', err:'ok'};
-const statusLabel = {ok:'HEALTHY', warn:'DEGRADED', err:'FAILED'};
-const statusBadge = {ok:'OK', warn:'WARN', err:'FAIL'};
-const dotClass    = {ok:'green', warn:'yellow', err:'red'};
 
-// clock
-setInterval(()=>{ document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false}); }, 1000);
-document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
+const STATUS_LABEL = {ok:'HEALTHY', warn:'DEGRADED', err:'FAILED'};
+const STATUS_BADGE = {ok:'OK', warn:'WARN', err:'ERR'};
+const DOT_CLASS    = {ok:'green', warn:'yellow', err:'red'};
 
-// log toggle
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function fmtTime(isoOrDate) {
+  try { return new Date(isoOrDate).toLocaleTimeString('en-US', {hour12:false}); } catch { return '—'; }
+}
+
+function fmtShortTime(isoOrDate) {
+  try { return new Date(isoOrDate).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}); } catch { return '—'; }
+}
+
+function fmtDuration(secs) {
+  if (secs == null) return '—';
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs/60)}m ${secs%60}s`;
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
+  return `${h}h ${m}m`;
+}
+
+// Try to extract a readable message from the raw event msg (may be JSON)
+function cleanEventMsg(raw) {
+  if (!raw) return '';
+  try {
+    const obj = JSON.parse(raw);
+    // Common shapes: {"0":"...", "1":"..."} or {"message":"..."}
+    if (obj.message) return obj.message;
+    if (obj['1']) return obj['1'];
+    if (obj['0']) {
+      // Truncate long node deprecation warnings
+      const s = obj['0'];
+      if (s.includes('DeprecationWarning')) return 'Node.js DeprecationWarning (punycode)';
+      return s.length > 120 ? s.substring(0, 120) + '…' : s;
+    }
+    return raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
+  } catch {
+    return raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
+  }
+}
+
+// ── LIVE DATA FETCHING ────────────────────────────────────────────────────────
+
+function buildOpenClawNode(agent, gw) {
+  // Determine status
+  let status, label;
+  if (agent.status === 'dead') {
+    status = 'err'; label = 'DEAD';
+  } else if (!agent.running) {
+    status = 'err'; label = 'PROCESS DOWN';
+  } else if (agent.status === 'err') {
+    status = 'err'; label = 'ERROR';
+  } else if (agent.status === 'warn') {
+    status = 'warn'; label = 'DEGRADED';
+  } else {
+    status = 'ok'; label = 'HEALTHY';
+  }
+
+  // Alert bar
+  let alert = null;
+  if (agent.status === 'dead') {
+    const mins = Math.round((agent.silenceSecs || 0) / 60);
+    alert = `Collector has been silent for ${mins} minutes. The machine or collector may be down.`;
+  } else if (!agent.running) {
+    alert = `OpenClaw gateway process is not running. Last heartbeat: ${agent.lastSeen || 'unknown'}.`;
+  } else if (status === 'err') {
+    alert = `OpenClaw is reporting errors. Check logs for details.`;
+  }
+
+  // Claude Code fix prompts — always present when err or dead
+  const fixes = [];
+  if (agent.status === 'dead') {
+    fixes.push({
+      type:'err',
+      text:'Collector is silent — the machine may be offline or the collector crashed.',
+      prompt:'My Watchclaw collector has stopped sending heartbeats. SSH into the machine, check if the collector process is running, and restart it. Also check if OpenClaw itself is still up.'
+    });
+    fixes.push({
+      type:'warn',
+      text:'If the machine is up, restart the collector manually.',
+      prompt:'Restart the Watchclaw collector: cd ~/Downloads && node collector.js > /tmp/watchclaw-collector.log 2>&1 &'
+    });
+  } else if (!agent.running) {
+    fixes.push({
+      type:'err',
+      text:'OpenClaw gateway process is down. Check if it crashed or was intentionally stopped.',
+      prompt:'My OpenClaw gateway process is down. Check if openclaw-gateway is running with: pgrep -fl openclaw. Show me the last 30 lines of /tmp/openclaw/*.log and restart the gateway if needed: launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist'
+    });
+    fixes.push({
+      type:'warn',
+      text:'Verify the LaunchAgent is configured for auto-restart.',
+      prompt:'Check if my OpenClaw LaunchAgent is loaded and set to restart on failure: launchctl list | grep openclaw && cat ~/Library/LaunchAgents/ai.openclaw.gateway.plist'
+    });
+  } else if (status === 'err') {
+    fixes.push({
+      type:'err',
+      text:'OpenClaw is running but reporting errors in the logs.',
+      prompt:'My OpenClaw agent is reporting errors. Show me the last 30 lines of /tmp/openclaw/*.log, check the process health, and help me fix what\'s wrong.'
+    });
+  } else if (status === 'warn') {
+    fixes.push({
+      type:'warn',
+      text:'Warnings detected in OpenClaw logs. May need attention if recurring.',
+      prompt:'My OpenClaw agent is showing warnings. Show me the last 20 lines of the OpenClaw log and tell me if anything needs fixing.'
+    });
+  }
+
+  // Metrics — combine heartbeat data with live gateway data
+  const memStr = (gw && gw.running && gw.memoryMb != null) ? `${gw.memoryMb} MB` : (agent.memoryMb != null ? `${agent.memoryMb} MB` : '—');
+  const cpuStr = (gw && gw.running && gw.cpuPercent != null) ? `${gw.cpuPercent}%` : '—';
+  const uptimeStr = (gw && gw.running) ? fmtDuration(gw.uptimeSeconds) : '—';
+  const pidStr = (gw && gw.running && gw.pid) ? `${gw.pid}` : '—';
+  const silenceStr = agent.silenceSecs != null ? (agent.silenceSecs < 120 ? `${agent.silenceSecs}s` : `${Math.round(agent.silenceSecs/60)}m`) : '—';
+
+  const metrics = [
+    ["Running", agent.running ? "Yes" : "No", agent.running ? "✅" : "❌", "Whether the OpenClaw process is currently running"],
+    ["Memory", memStr, "🧠", "RAM used by the OpenClaw gateway process"],
+    ["CPU", cpuStr, "⚡", "Current CPU usage of the gateway process"],
+    ["PID", pidStr, "🔢", "Process ID of the OpenClaw gateway"],
+    ["Uptime", uptimeStr, "⏱️", "How long the gateway has been running"],
+    ["Last beat", silenceStr + " ago", "♥", "Time since last collector heartbeat"],
+  ];
+
+  // Events — clean up the raw JSON messages
+  const events = (agent.recentEvents || []).map(ev => ({
+    time: fmtShortTime(ev.time || ev.created_at),
+    level: ev.level === 'error' ? 'error' : ev.level,
+    msg: cleanEventMsg(ev.msg),
+  }));
+
+  return { name:"🦞 OpenClaw", status, label, alert, fixes, metrics, events };
+}
+
+async function fetchStatus() {
+  try {
+    const [statusRes, gwRes] = await Promise.all([
+      fetch(API_URL + '/status'),
+      fetch(API_URL + '/gateway'),
+    ]);
+    if (!statusRes.ok) throw new Error(`HTTP ${statusRes.status}`);
+
+    const data = await statusRes.json();
+    gatewayData = gwRes.ok ? await gwRes.json() : null;
+    lastFetchOk = true;
+    lastFetchTime = new Date();
+
+    // Update monitored agents
+    for (const agent of data.agents) {
+      const key = agent.agent.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (key === 'openclaw') {
+        NODES.openclaw = buildOpenClawNode(agent, gatewayData);
+
+        // Feed events into the log strip (deduplicated)
+        for (const ev of (agent.recentEvents || []).slice(0, 10)) {
+          if (seenEventIds.has(ev.id)) continue;
+          seenEventIds.add(ev.id);
+          ALL_LOGS.unshift({
+            _id: ev.id,
+            time: fmtTime(ev.time || ev.created_at),
+            node: 'openclaw', cls: 'openclaw',
+            level: ev.level === 'error' ? 'error' : ev.level,
+            msg: cleanEventMsg(ev.msg),
+          });
+        }
+        if (ALL_LOGS.length > 50) ALL_LOGS.length = 50;
+      }
+    }
+
+    // Update dependent nodes based on OpenClaw state
+    const oc = NODES.openclaw;
+    if (oc.status === 'ok') {
+      NODES.discord.status = 'ok'; NODES.discord.label = 'HEALTHY';
+      NODES.discord.alert = null; NODES.discord.fixes = [];
+      NODES.claude.status = 'ok'; NODES.claude.label = 'HEALTHY';
+      NODES.claude.alert = null; NODES.claude.fixes = [];
+    } else {
+      // Discord and Claude depend on OpenClaw — mark as degraded if OpenClaw is down
+      if (oc.status === 'err') {
+        NODES.discord.status = 'warn'; NODES.discord.label = 'DEGRADED';
+        NODES.discord.alert = 'OpenClaw is down — Discord bot replies will not work until OpenClaw recovers.';
+        NODES.discord.fixes = [{type:'warn', text:'Fix OpenClaw first. Discord bot depends on it for replies.', prompt:null}];
+        NODES.claude.status = 'warn'; NODES.claude.label = 'DEGRADED';
+        NODES.claude.alert = 'Claude API is reachable but OpenClaw is not consuming it.';
+        NODES.claude.fixes = [{type:'info', text:'Claude API itself is fine. Fix OpenClaw to resume inference calls.', prompt:null}];
+      }
+    }
+
+    // Build metrics for dependent nodes
+    NODES.discord.metrics = [
+      ["Latency", "—", "📡", "Round-trip time to Discord gateway"],
+      ["Bot status", oc.status === 'ok' ? "Online" : "Impaired", oc.status === 'ok' ? "✅" : "⚠️", "Whether the bot can respond via OpenClaw"],
+      ["Uptime", "—", "✅", "Gateway uptime over 30 days"],
+      ["Channels", "—", "#️⃣", "Channels the bot is active in"],
+    ];
+    NODES.discord.events = oc.status !== 'ok' ? [{time: fmtShortTime(new Date()), level:'warn', msg:'OpenClaw dependency is ' + oc.label}] : [];
+
+    NODES.claude.metrics = [
+      ["Latency", "—", "⏱️", "Average inference response time"],
+      ["Tokens/day", "—", "📈", "Total tokens used in last 24h"],
+      ["Model", "sonnet-4-6", "🤖", "Claude model in use"],
+      ["Errors", "0", "✅", "API errors in the last hour"],
+    ];
+    NODES.claude.events = [];
+
+    NODES.scraper.metrics = [
+      ["Last run", "—", "🕐", "Timestamp of the most recent run"],
+      ["Runs today", "—", "📊", "Completed vs scheduled runs today"],
+      ["Errors", "0", "❌", "Failed attempts today"],
+      ["Next retry", "—", "⏰", "Scheduled time for next attempt"],
+    ];
+
+    NODES.x.metrics = [
+      ["Status", "—", "🚫", "Current HTTP status from X API"],
+      ["Resets in", "—", "⏳", "Time until rate limit resets"],
+      ["Limit", "500K/mo", "📋", "Monthly fetch limit"],
+      ["Used", "—", "📉", "Tweets fetched this month"],
+    ];
+
+    updateUI();
+  } catch (err) {
+    lastFetchOk = false;
+    updateSidebarBoxes();
+  }
+}
+
+// ── UI UPDATE ─────────────────────────────────────────────────────────────────
+
+function updateUI() {
+  updateFlowNodes();
+  updateSidebarBadges();
+  updateSystemChip();
+  updateSidebarBoxes();
+  renderLogs();
+  renderInspector(selectedNodeId);
+}
+
+function updateFlowNodes() {
+  for (const [id, n] of Object.entries(NODES)) {
+    const fn = document.getElementById('fn-' + id);
+    if (!fn) continue;
+
+    const isSelected = fn.classList.contains('selected');
+    fn.className = `fnode s-${n.status}${isSelected ? ' selected' : ''}`;
+
+    const dot = fn.querySelector('.fnode-dot');
+    if (dot) dot.className = `fnode-dot ${n.status}`;
+
+    const st = fn.querySelector('.fnode-status');
+    if (st) { st.className = `fnode-status ${n.status}`; st.textContent = n.label; }
+  }
+
+  // Update edges based on status
+  const edges = [
+    ['edge-openclaw-discord', NODES.openclaw.status],
+    ['edge-claude-openclaw',  NODES.openclaw.status],
+    ['edge-x-scraper',        NODES.x.status],
+    ['edge-scraper-discord',  NODES.scraper.status],
+  ];
+  for (const [edgeId, st] of edges) {
+    const el = document.getElementById(edgeId);
+    if (!el) continue;
+    const col = st === 'ok' ? '#b3e8ce' : st === 'warn' ? '#f5dfa0' : '#f5b8c0';
+    const marker = st === 'ok' ? 'url(#arr-ok)' : 'url(#arr-err)';
+    el.setAttribute('stroke', col);
+    el.setAttribute('marker-end', marker);
+  }
+}
+
+function updateSidebarBadges() {
+  const order = ['openclaw','discord','claude','scraper','x'];
+  for (const id of order) {
+    const n = NODES[id];
+    const sb = document.getElementById('sb-' + id);
+    if (sb) {
+      sb.className = 'status-badge ' + n.status;
+      sb.textContent = STATUS_BADGE[n.status] || n.status.toUpperCase();
+    }
+  }
+  // Update nav-sub for openclaw with live detail
+  const ocSub = document.querySelector('#sb-openclaw')?.closest('.nav-item')?.querySelector('.nav-sub');
+  if (ocSub) {
+    const oc = NODES.openclaw;
+    if (oc.status === 'err') ocSub.textContent = oc.label.toLowerCase();
+    else if (oc.status === 'warn') ocSub.textContent = 'warnings detected';
+    else ocSub.textContent = 'Discord · Claude API';
+  }
+}
+
+function updateSystemChip() {
+  const errors = Object.values(NODES).filter(x => x.status === 'err').length;
+  const warns  = Object.values(NODES).filter(x => x.status === 'warn').length;
+  const chip = document.getElementById('sysChip');
+  const sysDot = document.getElementById('sysDot');
+  const sysLbl = document.getElementById('sysLabel');
+  if (errors > 0) {
+    chip.className = 'status-chip err'; sysDot.className = 'dot red';
+    sysLbl.textContent = errors + ' issue' + (errors > 1 ? 's' : '') + ' detected';
+  } else if (warns > 0) {
+    chip.className = 'status-chip warn'; sysDot.className = 'dot yellow';
+    sysLbl.textContent = warns + ' warning' + (warns > 1 ? 's' : '');
+  } else {
+    chip.className = 'status-chip ok'; sysDot.className = 'dot green';
+    sysLbl.textContent = 'All systems go';
+  }
+}
+
+function updateSidebarBoxes() {
+  const hbVal = document.getElementById('hbVal');
+  const hbSub = document.getElementById('hbSub');
+  const gwVal = document.getElementById('gwVal');
+  const gwDetail = document.getElementById('gwDetail');
+
+  // Heartbeat box
+  if (!lastFetchOk) {
+    hbVal.innerHTML = '<span style="color:var(--red)">● Disconnected</span>';
+    hbSub.textContent = 'Cannot reach Watchclaw server';
+  } else {
+    hbVal.innerHTML = '<span style="color:var(--green)">● Live</span>';
+    const ago = lastFetchTime ? Math.round((Date.now() - lastFetchTime.getTime()) / 1000) : '?';
+    hbSub.textContent = 'Last poll ' + ago + 's ago';
+  }
+
+  // Gateway box
+  if (!gatewayData) {
+    gwVal.innerHTML = '<span style="color:var(--muted)">● Unknown</span>';
+    gwDetail.textContent = 'No data yet';
+  } else if (gatewayData.running) {
+    gwVal.innerHTML = '<span style="color:var(--green)">● Running</span>';
+    const parts = [];
+    if (gatewayData.memoryMb != null) parts.push(gatewayData.memoryMb + ' MB');
+    if (gatewayData.cpuPercent != null) parts.push(gatewayData.cpuPercent + '% CPU');
+    if (gatewayData.uptimeSeconds != null) parts.push('up ' + fmtDuration(gatewayData.uptimeSeconds));
+    gwDetail.textContent = parts.join(' · ') || 'PID ' + gatewayData.pid;
+  } else {
+    gwVal.innerHTML = '<span style="color:var(--red)">● Down</span>';
+    gwDetail.textContent = 'Gateway process not found';
+  }
+}
+
+// ── CLOCK ─────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
+  // Update "Xs ago" in heartbeat box
+  if (lastFetchOk && lastFetchTime) {
+    const ago = Math.round((Date.now() - lastFetchTime.getTime()) / 1000);
+    document.getElementById('hbSub').textContent = 'Last poll ' + ago + 's ago';
+  }
+}, 1000);
+document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
+
+// ── LOG STRIP ─────────────────────────────────────────────────────────────────
 function toggleLog() {
   logExpanded = !logExpanded;
   document.getElementById('logStrip').className = 'log-strip ' + (logExpanded ? 'expanded' : 'collapsed');
@@ -606,30 +876,40 @@ function toggleLog() {
 }
 
 function renderLogs() {
-  const errCount = ALL_LOGS.filter(l=>l.level==='error').length;
-  document.getElementById('errCount').textContent = errCount + ' error' + (errCount!==1?'s':'');
-  document.getElementById('logFeed').innerHTML = ALL_LOGS.map(l=>`
-    <div class="log-row ${l.level==='error'?'err-row':l.level==='warn'?'warn-row':''}" onclick="selectNode('${l.node}')">
-      <span class="log-t">${l.time}</span>
-      <span class="log-n ${l.cls}">${l.node}</span>
-      <span class="log-lv ${l.level}">${l.level==='error'?'ERR':l.level.toUpperCase()}</span>
-      <span class="log-msg">${l.msg}</span>
-    </div>`).join('');
+  const errCount = ALL_LOGS.filter(l => l.level === 'error').length;
+  const warnCount = ALL_LOGS.filter(l => l.level === 'warn').length;
+  const countEl = document.getElementById('errCount');
+  if (errCount > 0) {
+    countEl.textContent = errCount + ' error' + (errCount !== 1 ? 's' : '');
+    countEl.style.display = '';
+  } else if (warnCount > 0) {
+    countEl.textContent = warnCount + ' warning' + (warnCount !== 1 ? 's' : '');
+    countEl.style.background = 'var(--yellow-bg)'; countEl.style.color = 'var(--yellow)'; countEl.style.borderColor = 'var(--yellow-border)';
+    countEl.style.display = '';
+  } else {
+    countEl.style.display = 'none';
+  }
+
+  document.getElementById('logFeed').innerHTML = ALL_LOGS.length > 0 ? ALL_LOGS.map(l => `
+    <div class="log-row ${l.level === 'error' ? 'err-row' : l.level === 'warn' ? 'warn-row' : ''}" onclick="selectNode('${esc(l.node)}')">
+      <span class="log-t">${esc(l.time)}</span>
+      <span class="log-n ${esc(l.cls)}">${esc(l.node)}</span>
+      <span class="log-lv ${esc(l.level)}">${l.level === 'error' ? 'ERR' : esc(l.level.toUpperCase())}</span>
+      <span class="log-msg">${esc(l.msg)}</span>
+    </div>`).join('') : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Waiting for events…</div>';
 }
 
+// ── NODE SELECTION & INSPECTOR ────────────────────────────────────────────────
 function selectNode(id) {
-  // sidebar
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  selectedNodeId = id;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const order = ['openclaw','discord','claude','scraper','x'];
   const navItems = document.querySelectorAll('.nav-item');
   const i = order.indexOf(id);
   if (navItems[i]) navItems[i].classList.add('active');
-
-  // flow nodes
-  document.querySelectorAll('.fnode').forEach(n=>n.classList.remove('selected'));
-  const fn = document.getElementById('fn-'+id);
+  document.querySelectorAll('.fnode').forEach(n => n.classList.remove('selected'));
+  const fn = document.getElementById('fn-' + id);
   if (fn) fn.classList.add('selected');
-
   renderInspector(id);
 }
 
@@ -637,137 +917,82 @@ function renderInspector(id) {
   const n = NODES[id];
   document.getElementById('inspName').textContent = n.name;
   const pill = document.getElementById('inspPill');
-  pill.className = `insp-pill ${n.status}`;
-  pill.innerHTML = `<span class="dot ${dotClass[n.status]}"></span> ${n.label}`;
+  pill.className = 'insp-pill ' + n.status;
+  pill.innerHTML = '<span class="dot ' + (DOT_CLASS[n.status] || 'red') + '"></span> ' + esc(n.label);
 
-  document.getElementById('inspBody').innerHTML = `
-    ${n.alert ? `<div class="alert-bar"><span class="alert-bar-icon">⚠</span><span>${n.alert}</span></div>` : ''}
+  let html = '';
 
-    ${n.fixes.length > 0 ? `
-      <div class="fixes-section">
-        <div class="insp-label">✦ Ask Claude Code</div>
-        ${n.fixes.map((f,i)=>`
-          <div class="fix-card ${f.type}">
-            <span class="fix-num">${i+1}.</span>${f.text}
-            ${f.prompt ? `
-              <div class="prompt-block" onclick="copyPrompt(this)" data-prompt="${f.prompt.replace(/"/g,'&quot;')}">
-                <div class="prompt-label">✦ Claude Code prompt</div>
-                ${f.prompt}
-                <span class="prompt-copy-btn">Copy prompt</span>
-              </div>` : ''}
-          </div>`).join('')}
-      </div>
-    ` : `
-      <div class="no-issues">
-        <div style="font-size:24px;margin-bottom:6px">✓</div>
-        <div style="font-size:12px;color:var(--green);font-weight:600">No issues detected</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:3px">Checked a few seconds ago</div>
-      </div>
-    `}
+  // Alert bar
+  if (n.alert) {
+    html += '<div class="alert-bar"><span class="alert-bar-icon">⚠</span><span>' + esc(n.alert) + '</span></div>';
+  }
 
-    <div class="metrics-section">
-      <div class="insp-label">Metrics</div>
-      <div class="metrics-grid">
-        ${n.metrics.map(([l,v,icon,tip])=>`
-          <div class="metric-cell">
-            <div class="metric-info">i<div class="metric-tooltip">${tip}</div></div>
-            <span class="metric-icon">${icon}</span>
-            <div class="metric-v">${v}</div>
-            <div class="metric-l">${l}</div>
-          </div>`).join('')}
-      </div>
-    </div>
+  // Fixes with Claude Code prompts
+  if (n.fixes.length > 0) {
+    html += '<div class="fixes-section"><div class="insp-label">✦ Ask Claude Code</div>';
+    n.fixes.forEach((f, i) => {
+      html += '<div class="fix-card ' + esc(f.type) + '"><span class="fix-num">' + (i+1) + '.</span>' + esc(f.text);
+      if (f.prompt) {
+        html += '<div class="prompt-block" onclick="copyPrompt(this)" data-prompt="' + esc(f.prompt) + '">'
+          + '<div class="prompt-label">✦ Claude Code prompt</div>'
+          + esc(f.prompt)
+          + '<span class="prompt-copy-btn">Copy prompt</span></div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="no-issues"><div style="font-size:24px;margin-bottom:6px">✓</div>'
+      + '<div style="font-size:12px;color:var(--green);font-weight:600">No issues detected</div>'
+      + '<div style="font-size:10px;color:var(--muted);margin-top:3px">Checked '
+      + (lastFetchTime ? Math.round((Date.now() - lastFetchTime.getTime()) / 1000) + 's ago' : 'never')
+      + '</div></div>';
+  }
 
-    <div class="events-section">
-      <div class="insp-label">Recent Events</div>
-      ${n.events.map(e=>`
-        <div class="ev-row">
-          <span class="ev-t">${e.time}</span>
-          <span class="ev-lv ${e.level}">${e.level.toUpperCase()}</span>
-          <span class="ev-msg">${e.msg}</span>
-        </div>`).join('')}
-    </div>
+  // Metrics
+  if (n.metrics.length > 0) {
+    html += '<div class="metrics-section"><div class="insp-label">Metrics</div><div class="metrics-grid">';
+    n.metrics.forEach(([l, v, icon, tip]) => {
+      html += '<div class="metric-cell">'
+        + '<div class="metric-info">i<div class="metric-tooltip">' + esc(tip) + '</div></div>'
+        + '<span class="metric-icon">' + icon + '</span>'
+        + '<div class="metric-v">' + esc(v) + '</div>'
+        + '<div class="metric-l">' + esc(l) + '</div></div>';
+    });
+    html += '</div></div>';
+  }
 
-    <div style="border-top:1px solid var(--border);padding-top:12px">
-      <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Simulate</div>
-      <button class="sim-btn" onclick="cycleStatus('${id}')">Cycle status →</button>
-    </div>`;
+  // Events
+  html += '<div class="events-section"><div class="insp-label">Recent Events</div>';
+  if (n.events.length > 0) {
+    n.events.forEach(e => {
+      html += '<div class="ev-row"><span class="ev-t">' + esc(e.time) + '</span>'
+        + '<span class="ev-lv ' + esc(e.level) + '">' + esc(e.level.toUpperCase()) + '</span>'
+        + '<span class="ev-msg">' + esc(e.msg) + '</span></div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--muted);padding:8px 0">No events yet</div>';
+  }
+  html += '</div>';
+
+  document.getElementById('inspBody').innerHTML = html;
 }
 
 function copyPrompt(el) {
   const prompt = el.getAttribute('data-prompt');
-  navigator.clipboard.writeText(prompt).catch(()=>{});
+  navigator.clipboard.writeText(prompt).catch(() => {});
   const btn = el.querySelector('.prompt-copy-btn');
   const orig = btn.textContent;
   btn.textContent = '✓ Copied!';
-  btn.style.background = 'var(--green)';
-  btn.style.color = 'white';
-  btn.style.borderColor = 'var(--green)';
-  setTimeout(()=>{
-    btn.textContent = orig;
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-  }, 2000);
+  btn.style.background = 'var(--green)'; btn.style.color = 'white'; btn.style.borderColor = 'var(--green)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
 }
 
-function cycleStatus(id) {
-  const n = NODES[id];
-  n.status = statusCycle[n.status];
-  n.label  = statusLabel[n.status];
-
-  const sb = document.getElementById(`sb-${id}`);
-  if (sb) { sb.className = `status-badge ${n.status}`; sb.textContent = statusBadge[n.status]; }
-
-  const fn = document.getElementById('fn-'+id);
-  if (fn) {
-    fn.className = `fnode s-${n.status} selected`;
-    const dot = fn.querySelector('.fnode-dot');
-    const st  = fn.querySelector('.fnode-status');
-    if (dot) dot.className = `fnode-dot ${n.status}`;
-    if (st)  { st.className = `fnode-status ${n.status}`; st.textContent = n.label; }
-  }
-
-  const errors = Object.values(NODES).filter(x=>x.status==='err').length;
-  const warns  = Object.values(NODES).filter(x=>x.status==='warn').length;
-  const chip = document.getElementById('sysChip');
-  const sysDot = document.getElementById('sysDot');
-  const sysLbl = document.getElementById('sysLabel');
-  if (errors > 0) {
-    chip.className='status-chip err'; sysDot.className='dot red';
-    sysLbl.textContent = `${errors} issue${errors>1?'s':''} detected`;
-  } else if (warns > 0) {
-    chip.className='status-chip warn'; sysDot.className='dot yellow';
-    sysLbl.textContent = `${warns} warning${warns>1?'s':''}`;
-  } else {
-    chip.className='status-chip ok'; sysDot.className='dot green';
-    sysLbl.textContent = 'All systems go';
-  }
-
-  renderInspector(id);
-}
-
-// live log feed
-const liveMsgs = [
-  {node:'claude',cls:'claude',level:'info',msg:'Inference OK — 723 tokens, 1180ms'},
-  {node:'discord',cls:'discord',level:'info',msg:'Message delivered to #general (38ms)'},
-  {node:'openclaw',cls:'openclaw',level:'info',msg:'Agent heartbeat OK'},
-  {node:'openclaw',cls:'openclaw',level:'warn',msg:'Slow response — 3.1s to Discord'},
-  {node:'claude',cls:'claude',level:'info',msg:'Inference OK — 1.1K tokens, 940ms'},
-];
-let li = 0;
-setInterval(()=>{
-  const ts = new Date().toLocaleTimeString('en-US',{hour12:false});
-  ALL_LOGS.unshift({time:ts, ...liveMsgs[li % liveMsgs.length]});
-  li++;
-  if (ALL_LOGS.length > 20) ALL_LOGS.pop();
-  renderLogs();
-}, 4000);
-
-// init
-renderLogs();
-renderInspector('openclaw');
+// ── INIT & POLLING ────────────────────────────────────────────────────────────
+fetchStatus();
+setInterval(fetchStatus, POLL_INTERVAL);
 selectNode('openclaw');
+renderLogs();
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ const express = require('express');
 const Database = require('better-sqlite3');
 const fetch = require('node-fetch');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CONFIG = {
@@ -145,7 +146,7 @@ function checkForDeadAgents() {
   const now = Date.now();
 
   for (const agent of agents) {
-    const lastSeenMs = new Date(agent.last_seen).getTime();
+    const lastSeenMs = new Date(agent.last_seen + 'Z').getTime();
     const silenceMs  = now - lastSeenMs;
     const silenceMins = Math.round(silenceMs / 60000);
 
@@ -175,6 +176,11 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   next();
+});
+
+// GET / — serve the dashboard
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'watchclaw-demo.html'));
 });
 
 // POST /heartbeat — collector sends this every 60s
@@ -247,7 +253,7 @@ app.get('/status', (req, res) => {
   const now = Date.now();
 
   const result = agents.map(a => {
-    const lastSeenMs = new Date(a.last_seen).getTime();
+    const lastSeenMs = new Date(a.last_seen + 'Z').getTime();
     const silenceMs  = now - lastSeenMs;
     const latest     = getLatestHeartbeat.get(a.agent);
     const events     = getRecentEvents.all(a.agent);
@@ -270,6 +276,38 @@ app.get('/status', (req, res) => {
 app.get('/events/:agent', (req, res) => {
   const events = getRecentEvents.all(req.params.agent);
   res.json({ events });
+});
+
+// GET /gateway — live check of the OpenClaw gateway process
+app.get('/gateway', (req, res) => {
+  try {
+    // Find the openclaw-gateway process
+    const psOut = execSync('ps aux', { encoding: 'utf8', timeout: 5000 });
+    const lines = psOut.split('\n').filter(l => /openclaw/i.test(l) && !/grep/i.test(l));
+
+    if (lines.length === 0) {
+      return res.json({ running: false, pid: null, memoryMb: null, cpuPercent: null, uptimeSeconds: null });
+    }
+
+    // Parse the first matching line: USER PID %CPU %MEM VSZ RSS TT STAT STARTED TIME COMMAND
+    const parts = lines[0].trim().split(/\s+/);
+    const pid = parseInt(parts[1], 10);
+    const cpuPercent = parseFloat(parts[2]);
+    const rssMb = Math.round(parseInt(parts[5], 10) / 1024);
+
+    // Get process uptime via ps -o etime=
+    let uptimeSeconds = null;
+    try {
+      const etime = execSync(`ps -p ${pid} -o etime=`, { encoding: 'utf8', timeout: 3000 }).trim();
+      // etime format: [[dd-]hh:]mm:ss
+      const etParts = etime.replace(/-/g, ':').split(':').reverse().map(Number);
+      uptimeSeconds = (etParts[0] || 0) + (etParts[1] || 0) * 60 + (etParts[2] || 0) * 3600 + (etParts[3] || 0) * 86400;
+    } catch {}
+
+    res.json({ running: true, pid, memoryMb: rssMb, cpuPercent, uptimeSeconds });
+  } catch (err) {
+    res.json({ running: false, pid: null, memoryMb: null, cpuPercent: null, uptimeSeconds: null, error: err.message });
+  }
 });
 
 // GET /health — simple liveness check
