@@ -1,0 +1,49 @@
+{
+  "agent": {
+    "id": "openclaw",
+    "name": "OpenClaw",
+    "emoji": "🦞",
+    "description": "WhatsApp & Discord automation gateway"
+  },
+
+  "model": {
+    "id": "gemini-2.5-flash",
+    "name": "Gemini 2.5 Flash",
+    "provider": "google",
+    "costPerMillionInput": 0.15,
+    "costPerMillionOutput": 0.60
+  },
+
+  "channels": [
+    { "id": "discord",  "name": "Discord",  "emoji": "💬", "sub": "gateway · bot" },
+    { "id": "whatsapp", "name": "WhatsApp", "emoji": "📱", "sub": "web session" }
+  ],
+
+  "automations": [
+    { "id": "scraper", "name": "News Scraper", "emoji": "⚙️", "sub": "X → Discord · daily" },
+    { "id": "x",       "name": "X / Twitter",  "emoji": "𝕏",  "sub": "data source" }
+  ],
+
+  "flow": {
+    "lanes": [
+      { "id": "automations",    "label": "AUTOMATIONS",    "color": "#f6f0ff" },
+      { "id": "agent",          "label": "AGENT",          "color": "#eff8f3" },
+      { "id": "infrastructure", "label": "INFRASTRUCTURE", "color": "#eff6ff" }
+    ],
+    "nodes": [
+      { "id": "x",        "lane": "automations",    "col": 0 },
+      { "id": "scraper",  "lane": "automations",    "col": 1 },
+      { "id": "openclaw", "lane": "agent",          "col": 0 },
+      { "id": "model",    "lane": "infrastructure", "col": 0 },
+      { "id": "discord",  "lane": "infrastructure", "col": 1 },
+      { "id": "whatsapp", "lane": "infrastructure", "col": 2 }
+    ],
+    "edges": [
+      { "from": "x",        "to": "scraper",  "label": "fetch tweets" },
+      { "from": "scraper",  "to": "openclaw", "label": "scraped data", "sourceHandle": "bottom", "targetHandle": "top" },
+      { "from": "openclaw", "to": "discord",  "label": "replies",     "sourceHandle": "bottom", "targetHandle": "top" },
+      { "from": "openclaw", "to": "whatsapp", "label": "messages",    "sourceHandle": "bottom", "targetHandle": "top" },
+      { "from": "model",    "to": "openclaw", "label": "inference",   "sourceHandle": "top",    "targetHandle": "bottom" }
+    ]
+  }
+}

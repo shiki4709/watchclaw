@@ -5,377 +5,173 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watchclaw — Agent Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Fraunces:wght@700;900&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #f5f4f0;
-    --surface: #ffffff;
-    --surface2: #f9f8f5;
-    --border: #e4e2dc;
-    --border2: #d0cec6;
-    --ink: #1a1915;
-    --ink2: #3d3b35;
-    --muted: #8c897f;
-    --green: #0a7c4a;
-    --green-bg: #edfaf3;
-    --green-border: #b3e8ce;
-    --red: #c4132a;
-    --red-bg: #fff0f2;
-    --red-border: #f5b8c0;
-    --yellow: #8a5c00;
-    --yellow-bg: #fffbeb;
-    --yellow-border: #f5dfa0;
-    --blue: #0057b3;
-    --blue-bg: #eff6ff;
-    --blue-border: #bdd9ff;
-    --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.05);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--ink); font-family: 'DM Sans', sans-serif; min-height: 100vh; font-size: 13px; overflow: hidden; }
-
-  /* ── HEADER ── */
-  .header {
-    height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
-  }
-  .logo { font-family: 'Fraunces', serif; font-weight: 900; font-size: 21px; color: var(--ink); letter-spacing: -0.5px; }
-  .logo span { color: var(--green); }
-
-  .status-chip {
-    display: inline-flex; align-items: center; gap: 7px;
-    padding: 6px 14px; border-radius: 100px; font-size: 12px; font-weight: 600;
-    border: 1.5px solid; transition: all 0.3s;
-  }
-  .status-chip.ok   { color: var(--green);  border-color: var(--green-border);  background: var(--green-bg); }
-  .status-chip.warn { color: var(--yellow); border-color: var(--yellow-border); background: var(--yellow-bg); }
-  .status-chip.err  { color: var(--red);    border-color: var(--red-border);    background: var(--red-bg); }
-
-  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .dot.green  { background: var(--green); }
-  .dot.red    { background: var(--red);   animation: blink .8s step-end infinite; }
-  .dot.yellow { background: #d4a017;      animation: blink 1.4s step-end infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  .clock { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
-
-  /* ── LAYOUT ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 188px 1fr 320px;
-    height: calc(100vh - 52px);
-  }
-
-  /* ── SIDEBAR ── */
-  .sidebar {
-    background: var(--surface); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow-y: auto;
-  }
-  .nav-section { padding: 14px 0 6px; }
-  .nav-label {
-    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--muted); padding: 0 14px 6px;
-  }
-  .nav-item {
-    display: flex; align-items: center; gap: 9px; padding: 8px 14px;
-    cursor: pointer; border-left: 2.5px solid transparent;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .nav-item:hover { background: var(--surface2); }
-  .nav-item.active { background: var(--surface2); border-left-color: var(--ink); }
-  .nav-emoji { font-size: 15px; flex-shrink: 0; }
-  .nav-info { flex: 1; min-width: 0; }
-  .nav-name { font-size: 12px; font-weight: 500; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nav-sub  { font-size: 10px; color: var(--muted); margin-top: 1px; }
-  .status-badge {
-    font-size: 9px; font-weight: 700; padding: 2px 6px;
-    border-radius: 100px; letter-spacing: 0.04em; flex-shrink: 0;
-  }
-  .status-badge.ok   { color: var(--green);  background: var(--green-bg);  border: 1px solid var(--green-border); }
-  .status-badge.err  { color: var(--red);    background: var(--red-bg);    border: 1px solid var(--red-border); }
-  .status-badge.warn { color: var(--yellow); background: var(--yellow-bg); border: 1px solid var(--yellow-border); }
-
-  .sidebar-divider { height: 1px; background: var(--border); margin: 4px 14px; }
-
-  .heartbeat-box {
-    margin: 10px 12px 6px;
-    padding: 10px 12px;
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-  }
-  .heartbeat-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
-  .heartbeat-val { font-size: 12px; font-weight: 600; color: var(--green); }
-  .heartbeat-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-  .gateway-box {
-    margin: 0 12px 14px;
-    padding: 10px 12px;
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-  }
-  .gateway-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
-  .gateway-val { font-size: 12px; font-weight: 600; }
-  .gateway-detail { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-  /* ── MAIN ── */
-  .main { display: flex; flex-direction: column; overflow: hidden; }
-
-  /* ── FLOW — hero section ── */
-  .flow-section { flex: 1; padding: 16px 18px 12px; display: flex; flex-direction: column; min-height: 0; }
-  .section-label {
-    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .section-label span { flex: 1; height: 1px; background: var(--border); }
-
-  .flow-canvas {
-    flex: 1; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; position: relative; overflow: hidden;
-    box-shadow: var(--shadow); min-height: 0;
-  }
-  .flow-canvas .react-flow { border-radius: 12px; }
-
-  .fnode {
-    position: absolute; background: var(--surface); border: 1.5px solid var(--border2);
-    border-radius: 12px; padding: 12px 16px; cursor: pointer;
-    transition: all 0.18s; text-align: center; min-width: 104px; z-index: 2;
-    box-shadow: var(--shadow);
-  }
-  .fnode:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-  .fnode.selected { border-color: var(--ink); box-shadow: 0 0 0 2.5px rgba(26,25,21,0.15), var(--shadow-md); }
-  .fnode.s-err  { border-color: var(--red-border);    background: var(--red-bg); }
-  .fnode.s-warn { border-color: var(--yellow-border); background: var(--yellow-bg); }
-  .fnode.s-ok   { border-color: var(--green-border);  background: var(--green-bg); }
-
-  .fnode-icon   { font-size: 22px; display: block; margin-bottom: 4px; }
-  .fnode-name   { font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
-  .fnode-status { font-size: 9px; font-weight: 700; margin-top: 3px; letter-spacing: 0.04em; }
-  .fnode-status.ok   { color: var(--green); }
-  .fnode-status.err  { color: var(--red); }
-  .fnode-status.warn { color: var(--yellow); }
-
-  .fnode-dot {
-    position: absolute; top: 7px; right: 7px;
-    width: 8px; height: 8px; border-radius: 50%; border: 2px solid white;
-  }
-  .fnode-dot.ok   { background: var(--green); }
-  .fnode-dot.err  { background: var(--red);   animation: blink .8s step-end infinite; }
-  .fnode-dot.warn { background: #d4a017;      animation: blink 1.4s step-end infinite; }
-
-  /* ── LOG STRIP — collapsed at bottom ── */
-  .log-strip {
-    flex-shrink: 0; border-top: 1px solid var(--border);
-    background: var(--surface); transition: height 0.25s ease;
-    overflow: hidden;
-  }
-  .log-strip.collapsed { height: 36px; }
-  .log-strip.expanded  { height: 180px; }
-
-  .log-strip-header {
-    height: 36px; display: flex; align-items: center; justify-content: space-between;
-    padding: 0 18px; cursor: pointer; user-select: none;
-  }
-  .log-strip-header:hover { background: var(--surface2); }
-  .log-strip-title {
-    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--muted);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .log-err-count {
-    background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border);
-    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 100px;
-  }
-  .log-toggle { font-size: 10px; color: var(--muted); }
-
-  .log-body { padding: 0 18px 8px; overflow-y: auto; height: 144px; }
-
-  .log-row {
-    display: grid; grid-template-columns: 64px 68px 34px 1fr;
-    gap: 6px; padding: 4px 4px; border-bottom: 1px solid var(--border);
-    cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10.5px;
-    border-radius: 3px; transition: background 0.1s;
-  }
-  .log-row:hover   { background: var(--surface2); }
-  .log-row.err-row { background: var(--red-bg); }
-  .log-row.warn-row{ background: var(--yellow-bg); }
-  .log-t { color: var(--muted); }
-  .log-n { font-weight: 500; }
-  .log-n.openclaw { color: var(--blue); }
-  .log-n.scraper  { color: var(--red); }
-  .log-n.discord  { color: #5865f2; }
-  .log-n.claude   { color: #7c3aed; }
-  .log-n.x        { color: var(--ink2); }
-  .log-lv { font-weight: 700; font-size: 9px; display: flex; align-items: center; }
-  .log-lv.error { color: var(--red); }
-  .log-lv.warn  { color: var(--yellow); }
-  .log-lv.info  { color: var(--green); }
-  .log-msg { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  /* ── INSPECTOR ── */
-  .inspector {
-    background: var(--surface); border-left: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-
-  /* inspector top — status + name */
-  .insp-top {
-    padding: 18px 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-  }
-  .insp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .insp-node { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 900; color: var(--ink); line-height: 1.1; margin-bottom: 8px; }
-  .insp-pill {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 11px; border-radius: 100px; font-size: 11px; font-weight: 600; border: 1.5px solid;
-  }
-  .insp-pill.ok   { color: var(--green);  border-color: var(--green-border);  background: var(--green-bg); }
-  .insp-pill.err  { color: var(--red);    border-color: var(--red-border);    background: var(--red-bg); }
-  .insp-pill.warn { color: var(--yellow); border-color: var(--yellow-border); background: var(--yellow-bg); }
-
-  /* inspector body — scrollable */
-  .insp-body { flex: 1; overflow-y: auto; padding: 16px 20px 20px; }
-
-  .alert-bar {
-    background: var(--red-bg); border: 1px solid var(--red-border);
-    border-radius: 8px; padding: 11px 13px; font-size: 11px; color: var(--red);
-    line-height: 1.55; margin-bottom: 16px; display: flex; gap: 8px;
-  }
-  .alert-bar-icon { flex-shrink: 0; font-size: 14px; }
-
-  /* fixes — PROMINENT */
-  .fixes-section { margin-bottom: 20px; }
-  .insp-label {
-    font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
-  }
-
-  .fix-card {
-    border-radius: 8px; padding: 11px 13px; margin-bottom: 7px;
-    font-size: 12px; line-height: 1.6; border: 1px solid; color: var(--ink2);
-    position: relative;
-  }
-  .fix-card.err  { background: var(--red-bg);    border-color: var(--red-border); }
-  .fix-card.warn { background: var(--yellow-bg); border-color: var(--yellow-border); }
-  .fix-card.info { background: var(--blue-bg);   border-color: var(--blue-border); }
-  .fix-card.ok   { background: var(--green-bg);  border-color: var(--green-border); }
-  .fix-num { font-weight: 700; color: var(--muted); margin-right: 4px; }
-
-  .prompt-block {
-    background: #f0f4ff; border: 1px solid #c7d4f5; border-radius: 6px;
-    padding: 8px 11px; font-size: 11px; color: var(--ink2);
-    margin-top: 8px; cursor: pointer; position: relative;
-    line-height: 1.5; transition: background 0.12s;
-    padding-right: 52px;
-  }
-  .prompt-block:hover { background: #e6ecff; }
-  .prompt-copy-btn {
-    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    font-size: 10px; font-weight: 600; color: var(--blue);
-    background: white; border: 1px solid var(--blue-border);
-    border-radius: 4px; padding: 2px 7px; cursor: pointer;
-    white-space: nowrap; font-family: 'DM Sans', sans-serif;
-    transition: all 0.12s;
-  }
-  .prompt-copy-btn:hover { background: var(--blue); color: white; }
-  .prompt-label {
-    font-size: 9px; font-weight: 700; color: var(--blue);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
-    display: flex; align-items: center; gap: 4px;
-  }
-
-  /* metrics — secondary, compact */
-  .metrics-section { margin-bottom: 20px; }
-  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .metric-cell {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 9px 10px; text-align: center; position: relative;
-  }
-  .metric-icon { font-size: 14px; display: block; margin-bottom: 3px; }
-  .metric-v { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 700; color: var(--ink); }
-  .metric-l { font-size: 9px; color: var(--muted); margin-top: 1px; text-transform: uppercase; letter-spacing: 0.08em; }
-  .metric-info {
-    position: absolute; top: 5px; right: 6px; width: 13px; height: 13px; border-radius: 50%;
-    background: var(--border); color: var(--muted); font-size: 8px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center; cursor: default;
-    transition: background 0.15s;
-  }
-  .metric-info:hover { background: var(--border2); color: var(--ink2); }
-  .metric-info:hover .metric-tooltip { display: block; }
-  .metric-tooltip {
-    display: none; position: absolute; bottom: calc(100% + 5px); right: 0;
-    background: var(--ink); color: white; font-size: 10px; font-weight: 400;
-    padding: 5px 9px; border-radius: 6px; white-space: nowrap; z-index: 99;
-    pointer-events: none; line-height: 1.4; text-align: left; box-shadow: var(--shadow-md);
-  }
-  .metric-tooltip::after {
-    content: ''; position: absolute; top: 100%; right: 5px;
-    border: 4px solid transparent; border-top-color: var(--ink);
-  }
-
-  /* events — compact */
-  .events-section { margin-bottom: 16px; }
-  .ev-row { display: flex; gap: 7px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 10.5px; align-items: flex-start; }
-  .ev-t   { font-family: 'DM Mono', monospace; color: var(--muted); white-space: nowrap; flex-shrink: 0; font-size: 10px; }
-  .ev-lv  { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
-  .ev-lv.error { background: var(--red-bg);    color: var(--red); }
-  .ev-lv.warn  { background: var(--yellow-bg); color: var(--yellow); }
-  .ev-lv.info  { background: var(--green-bg);  color: var(--green); }
-  .ev-msg { color: var(--ink2); line-height: 1.5; }
-
-  .no-issues {
-    background: var(--green-bg); border: 1px solid var(--green-border);
-    border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 16px;
-  }
-
-  .sim-btn {
-    width: 100%; padding: 8px; font-family: inherit; font-size: 11px; font-weight: 500;
-    background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
-    color: var(--ink2); cursor: pointer; transition: all 0.12s;
-  }
-  .sim-btn:hover { background: var(--ink); color: white; border-color: var(--ink); }
-
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-  /* ── REACT FLOW CUSTOM NODES ── */
-  .react-flow__node-statusNode { background: none !important; padding: 0 !important; border: none !important; border-radius: 0 !important; }
-  .rf-node {
-    background: var(--surface); border: 1.5px solid var(--border2);
-    border-radius: 12px; padding: 12px 16px; text-align: center;
-    min-width: 104px; box-shadow: var(--shadow); cursor: pointer;
-    transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
-    position: relative;
-  }
-  .rf-node:hover { box-shadow: var(--shadow-md); }
-  .react-flow__node.selected .rf-node { border-color: var(--ink); box-shadow: 0 0 0 2.5px rgba(26,25,21,0.15), var(--shadow-md); }
-  .rf-node.s-ok   { border-color: var(--green-border);  background: var(--green-bg); }
-  .rf-node.s-warn { border-color: var(--yellow-border); background: var(--yellow-bg); }
-  .rf-node.s-err  { border-color: var(--red-border);    background: var(--red-bg); }
-  .rf-node-dot {
-    position: absolute; top: 7px; right: 7px;
-    width: 8px; height: 8px; border-radius: 50%; border: 2px solid white;
-  }
-  .rf-node-dot.green  { background: var(--green); }
-  .rf-node-dot.red    { background: var(--red);   animation: blink .8s step-end infinite; }
-  .rf-node-dot.yellow { background: #d4a017;      animation: blink 1.4s step-end infinite; }
-  .rf-node-icon   { font-size: 22px; display: block; margin-bottom: 4px; }
-  .rf-node-name   { font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
-  .rf-node-badge  { font-size: 9px; font-weight: 700; margin-top: 3px; letter-spacing: 0.04em; }
-  .rf-node-badge.ok   { color: var(--green); }
-  .rf-node-badge.warn { color: var(--yellow); }
-  .rf-node-badge.err  { color: var(--red); }
-  .rf-handle { opacity: 0 !important; width: 1px !important; height: 1px !important; min-width: 0 !important; min-height: 0 !important; }
-
-  /* React Flow edge labels */
-  .react-flow__edge-text { font-family: 'DM Sans', sans-serif !important; }
-
-  /* Stale data banner */
-  .stale-banner {
-    display: none; background: var(--yellow-bg); border-bottom: 1px solid var(--yellow-border);
-    padding: 6px 20px; font-size: 11px; font-weight: 500; color: var(--yellow);
-    text-align: center;
-  }
-  .stale-banner.visible { display: block; }
-</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12/dist/style.css">
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     STYLES
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg:#f5f4f0; --surface:#fff; --surface2:#f9f8f5;
+  --border:#e4e2dc; --border2:#d0cec6;
+  --ink:#1a1915; --ink2:#3d3b35; --muted:#8c897f;
+  --green:#0a7c4a; --green-bg:#edfaf3; --green-bdr:#b3e8ce;
+  --red:#c4132a;   --red-bg:#fff0f2;   --red-bdr:#f5b8c0;
+  --yel:#8a5c00;   --yel-bg:#fffbeb;   --yel-bdr:#f5dfa0;
+  --blue:#0057b3;  --blue-bg:#eff6ff;  --blue-bdr:#bdd9ff;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px;overflow:hidden;min-height:100vh}
+
+/* ── HEADER ── */
+.header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.logo{font-family:'Fraunces',serif;font-weight:900;font-size:21px;letter-spacing:-.5px}
+.logo b{color:var(--green)}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:100px;font-size:12px;font-weight:600;border:1.5px solid}
+.chip.ok{color:var(--green);border-color:var(--green-bdr);background:var(--green-bg)}
+.chip.warn{color:var(--yel);border-color:var(--yel-bdr);background:var(--yel-bg)}
+.chip.err{color:var(--red);border-color:var(--red-bdr);background:var(--red-bg)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot.g{background:var(--green)}.dot.r{background:var(--red);animation:blink .8s step-end infinite}.dot.y{background:#d4a017;animation:blink 1.4s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.clock{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)}
+
+/* ── STALE BANNER ── */
+.stale{display:none;background:var(--yel-bg);border-bottom:1px solid var(--yel-bdr);padding:6px 20px;font-size:11px;font-weight:500;color:var(--yel);text-align:center}
+.stale.on{display:block}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:188px 1fr 280px;height:calc(100vh - 52px)}
+
+/* ── SIDEBAR ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.nav-sec{padding:14px 0 6px}
+.nav-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 14px 6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;border-left:2.5px solid transparent;transition:background .1s}
+.nav-item:hover{background:var(--surface2)}
+.nav-item.on{background:var(--surface2);border-left-color:var(--ink)}
+.nav-emoji{font-size:15px;flex-shrink:0}
+.nav-info{flex:1;min-width:0}
+.nav-name{font-size:12px;font-weight:500;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:100px;letter-spacing:.04em;flex-shrink:0}
+.badge.ok{color:var(--green);background:var(--green-bg);border:1px solid var(--green-bdr)}
+.badge.err{color:var(--red);background:var(--red-bg);border:1px solid var(--red-bdr)}
+.badge.warn{color:var(--yel);background:var(--yel-bg);border:1px solid var(--yel-bdr)}
+.side-div{height:1px;background:var(--border);margin:4px 14px}
+.side-box{margin:10px 12px 6px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px}
+.side-box:last-child{margin-bottom:14px}
+.side-box-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+.side-box-val{font-size:12px;font-weight:600}
+.side-box-sub{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* ── MAIN ── */
+.main{display:flex;flex-direction:column;overflow:hidden}
+
+/* ── FLOW ── */
+.flow-area{flex:1;padding:16px 18px 12px;display:flex;flex-direction:column;min-height:0}
+.flow-head{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.flow-head span{flex:1;height:1px;background:var(--border)}
+.flow-canvas{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;position:relative;overflow:hidden;box-shadow:var(--shadow);min-height:0}
+.flow-canvas .react-flow{border-radius:12px}
+
+/* ── REACT FLOW NODES ── */
+.react-flow__node-statusNode{background:none!important;padding:0!important;border:none!important;border-radius:0!important}
+.rf-node{background:var(--surface);border:2px solid var(--border2);border-radius:14px;padding:18px 24px;text-align:center;min-width:140px;min-height:90px;box-shadow:var(--shadow);cursor:pointer;transition:border-color .18s,background .18s,box-shadow .18s;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rf-node:hover{box-shadow:var(--shadow-md)}
+.react-flow__node.selected .rf-node{border-color:var(--ink);box-shadow:0 0 0 2.5px rgba(26,25,21,.15),var(--shadow-md)}
+.rf-node.s-ok{border-color:var(--green-bdr);background:var(--green-bg)}
+.rf-node.s-warn{border-color:var(--yel-bdr);background:var(--yel-bg)}
+.rf-node.s-err{border-color:var(--red-bdr);background:var(--red-bg)}
+.rf-dot{position:absolute;top:8px;right:8px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.rf-dot.g{background:var(--green)}
+.rf-dot.r{background:var(--red);animation:blink .8s step-end infinite;box-shadow:0 0 6px rgba(196,19,42,.4)}
+.rf-dot.y{background:#d4a017;animation:blink 1.4s step-end infinite;box-shadow:0 0 6px rgba(212,160,23,.4)}
+.rf-icon{font-size:32px;display:block;margin-bottom:6px}
+.rf-name{font-size:14px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.rf-badge{font-size:13px;font-weight:700;margin-top:5px;letter-spacing:.04em}
+.rf-badge.ok{color:var(--green)}.rf-badge.warn{color:var(--yel)}.rf-badge.err{color:var(--red)}
+.rf-handle{opacity:0!important;width:1px!important;height:1px!important;min-width:0!important;min-height:0!important}
+
+/* ── SWIM LANES ── */
+.react-flow__node-laneNode{background:none!important;padding:0!important;border:none!important;border-radius:0!important;pointer-events:none!important}
+.rf-lane{border-radius:10px;border:1.5px dashed;position:relative;pointer-events:none}
+.rf-lane-lbl{position:absolute;left:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-family:'DM Sans',sans-serif;writing-mode:vertical-lr;transform:rotate(180deg);user-select:none;border-radius:8px 0 0 8px}
+
+/* ── EDGE LABELS ── */
+.react-flow__edge-text{font-family:'DM Sans',sans-serif!important}
+
+/* ── LOG STRIP ── */
+.log-strip{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);transition:height .25s;overflow:hidden}
+.log-strip.shut{height:36px}.log-strip.open{height:180px}
+.log-hdr{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;cursor:pointer;user-select:none}
+.log-hdr:hover{background:var(--surface2)}
+.log-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.log-cnt{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bdr);font-size:10px;font-weight:700;padding:1px 6px;border-radius:100px}
+.log-toggle{font-size:10px;color:var(--muted)}
+.log-body{padding:0 18px 8px;overflow-y:auto;height:144px}
+.log-row{display:grid;grid-template-columns:64px 68px 34px 1fr;gap:6px;padding:4px;border-bottom:1px solid var(--border);cursor:pointer;font-family:'DM Mono',monospace;font-size:10.5px;border-radius:3px;transition:background .1s}
+.log-row:hover{background:var(--surface2)}
+.log-row.e{background:var(--red-bg)}.log-row.w{background:var(--yel-bg)}
+.log-t{color:var(--muted)}.log-n{font-weight:500;color:var(--blue)}
+.log-lv{font-weight:700;font-size:9px;display:flex;align-items:center}
+.log-lv.error{color:var(--red)}.log-lv.warn{color:var(--yel)}.log-lv.info{color:var(--green)}
+.log-msg{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── INSPECTOR ── */
+.inspector{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.insp-top{padding:10px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px}
+.insp-name{font-family:'Fraunces',serif;font-size:16px;font-weight:900;color:var(--ink);line-height:1.1}
+.insp-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:10px;font-weight:600;border:1.5px solid;flex-shrink:0}
+.insp-pill.ok{color:var(--green);border-color:var(--green-bdr);background:var(--green-bg)}
+.insp-pill.err{color:var(--red);border-color:var(--red-bdr);background:var(--red-bg)}
+.insp-pill.warn{color:var(--yel);border-color:var(--yel-bdr);background:var(--yel-bg)}
+.insp-body{flex:1;overflow-y:auto;padding:10px 12px 14px}
+
+/* ── INSPECTOR DIAGNOSIS ── */
+.insp-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.diag-sec{margin-bottom:16px;padding-left:11px;border-left:3px solid transparent}
+.diag-sec:last-child{margin-bottom:0}
+.diag-sec.c-red{border-left-color:var(--red)}
+.diag-sec.c-orange{border-left-color:#e87b35}
+.diag-sec.c-blue{border-left-color:var(--blue)}
+
+.diag-status{border-radius:10px;padding:14px 15px;margin-bottom:16px;font-size:15px;line-height:1.45;font-weight:500;display:flex;gap:10px;align-items:flex-start;border:1.5px solid;border-left:3.5px solid}
+.diag-status.err{background:var(--red-bg);border-color:var(--red-bdr);border-left-color:var(--red);color:var(--red)}
+.diag-status.warn{background:var(--yel-bg);border-color:var(--yel-bdr);border-left-color:var(--yel);color:var(--yel)}
+.diag-status-icon{flex-shrink:0;font-size:18px;line-height:1.2}
+.diag-status-text{flex:1}
+
+.diag-cause{background:#1a1915;color:#e8e6e0;border-radius:8px;padding:12px 14px;font-family:'DM Mono',monospace;font-size:13px;line-height:1.6;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+.diag-hl{color:#ff8a8a;font-weight:600}
+
+.diag-impact{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.5;color:var(--ink2);display:flex;gap:8px;align-items:flex-start}
+
+.prompt-block{background:#f0f4ff;border:1px solid #c7d4f5;border-radius:8px;padding:12px 14px 12px 14px;font-size:12.5px;color:var(--ink2);cursor:pointer;position:relative;line-height:1.5;transition:background .12s;padding-right:58px}
+.prompt-block:hover{background:#e6ecff}
+.prompt-lbl{font-size:9px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.prompt-copy{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:600;color:var(--blue);background:#fff;border:1px solid var(--blue-bdr);border-radius:5px;padding:3px 9px;cursor:pointer;white-space:nowrap;transition:all .12s}
+.prompt-copy:hover{background:var(--blue);color:#fff}
+
+/* ── METRICS ── */
+.metrics-sec{margin-bottom:20px}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;text-align:center;position:relative}
+.metric-icon{font-size:14px;display:block;margin-bottom:3px}
+.metric-v{font-family:'Fraunces',serif;font-size:16px;font-weight:700;color:var(--ink)}
+.metric-l{font-size:9px;color:var(--muted);margin-top:1px;text-transform:uppercase;letter-spacing:.08em}
+
+.no-issues{background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:18px;text-align:center;margin-bottom:16px}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     IMPORT MAP (React + React Flow from CDN)
+     ═══════════════════════════════════════════════════════════════════════ -->
 <script type="importmap">
 {
   "imports": {
@@ -390,729 +186,589 @@
 </head>
 <body>
 
-<!-- HEADER -->
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     HTML STRUCTURE
+     ═══════════════════════════════════════════════════════════════════════ -->
+
 <header class="header">
-  <div class="logo">Watch<span>claw</span></div>
-  <div class="status-chip err" id="sysChip">
-    <span class="dot red" id="sysDot"></span>
-    <span id="sysLabel">2 issues detected</span>
-  </div>
+  <div class="logo">Watch<b>claw</b></div>
+  <div class="chip err" id="sysChip"><span class="dot r" id="sysDot"></span><span id="sysLbl">Loading…</span></div>
   <div class="clock" id="clock">--:--:--</div>
 </header>
 
-<div class="stale-banner" id="staleBanner">Data may be stale — last update <span id="staleAge">?</span> minutes ago</div>
+<div class="stale" id="staleBanner">Data may be stale — last update <span id="staleAge">?</span> minutes ago</div>
 
 <div class="layout">
-
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div class="nav-section">
-      <div class="nav-label">Agents</div>
-      <div class="nav-item active" onclick="selectNode('openclaw')">
-        <span class="nav-emoji">🦞</span>
-        <div class="nav-info"><div class="nav-name">OpenClaw</div><div class="nav-sub">Discord · Claude API</div></div>
-        <span class="status-badge warn" id="sb-openclaw">WARN</span>
-      </div>
-      <div class="nav-item" onclick="selectNode('discord')">
-        <span class="nav-emoji">💬</span>
-        <div class="nav-info"><div class="nav-name">Discord Bot</div><div class="nav-sub">gateway · online</div></div>
-        <span class="status-badge ok" id="sb-discord">OK</span>
-      </div>
-      <div class="nav-item" onclick="selectNode('claude')">
-        <span class="nav-emoji">✦</span>
-        <div class="nav-info"><div class="nav-name">Claude API</div><div class="nav-sub">sonnet-4-6</div></div>
-        <span class="status-badge ok" id="sb-claude">OK</span>
-      </div>
+    <div id="sidebarNav"><div style="padding:20px 14px;color:var(--muted);font-size:11px">Loading…</div></div>
+    <div class="side-div"></div>
+    <div class="side-box">
+      <div class="side-box-label">Collector heartbeat</div>
+      <div class="side-box-val" id="hbVal">Connecting…</div>
+      <div class="side-box-sub" id="hbSub">—</div>
     </div>
-
-    <div class="sidebar-divider"></div>
-
-    <div class="nav-section">
-      <div class="nav-label">Automations</div>
-      <div class="nav-item" onclick="selectNode('scraper')">
-        <span class="nav-emoji">⚙️</span>
-        <div class="nav-info"><div class="nav-name">News Scraper</div><div class="nav-sub">X → Discord · daily</div></div>
-        <span class="status-badge err" id="sb-scraper">FAIL</span>
-      </div>
-      <div class="nav-item" onclick="selectNode('x')">
-        <span class="nav-emoji">𝕏</span>
-        <div class="nav-info"><div class="nav-name">X / Twitter</div><div class="nav-sub">rate limited</div></div>
-        <span class="status-badge err" id="sb-x">ERR</span>
-      </div>
-    </div>
-
-    <div class="sidebar-divider"></div>
-
-    <div class="heartbeat-box">
-      <div class="heartbeat-label">Collector heartbeat</div>
-      <div class="heartbeat-val" id="hbVal">● Connecting…</div>
-      <div class="heartbeat-sub" id="hbSub">—</div>
-    </div>
-    <div class="gateway-box">
-      <div class="gateway-label">Gateway health</div>
-      <div class="gateway-val" id="gwVal">● Checking…</div>
-      <div class="gateway-detail" id="gwDetail">—</div>
+    <div class="side-box">
+      <div class="side-box-label">Gateway health</div>
+      <div class="side-box-val" id="gwVal">Checking…</div>
+      <div class="side-box-sub" id="gwSub">—</div>
     </div>
   </aside>
 
   <!-- MAIN -->
   <main class="main">
-
-    <!-- FLOW — hero -->
-    <div class="flow-section">
-      <div class="section-label">Architecture Flow <span></span></div>
-      <div class="flow-canvas" id="flowCanvas">
-        <div id="react-flow-root" style="width:100%;height:100%"></div>
-      </div>
+    <div class="flow-area">
+      <div class="flow-head">Architecture Flow <span></span></div>
+      <div class="flow-canvas"><div id="rf-root" style="width:100%;height:100%"></div></div>
     </div>
-
-    <!-- LOG STRIP — collapsed by default -->
-    <div class="log-strip collapsed" id="logStrip">
-      <div class="log-strip-header" onclick="toggleLog()">
-        <div class="log-strip-title">
-          Event Log
-          <span class="log-err-count" id="errCount">3 errors</span>
-        </div>
-        <span class="log-toggle" id="logToggle">▲ expand</span>
+    <div class="log-strip shut" id="logStrip">
+      <div class="log-hdr" onclick="W.toggleLog()">
+        <div class="log-title">Event Log <span class="log-cnt" id="logCnt" style="display:none">0</span></div>
+        <span class="log-toggle" id="logTgl">▲ expand</span>
       </div>
       <div class="log-body" id="logFeed"></div>
     </div>
-
   </main>
 
   <!-- INSPECTOR -->
   <aside class="inspector">
     <div class="insp-top">
-      <div class="insp-eyebrow">Inspecting</div>
-      <div class="insp-node" id="inspName">🦞 OpenClaw</div>
-      <div class="insp-pill warn" id="inspPill"><span class="dot yellow"></span> DEGRADED</div>
+      <div class="insp-name" id="inspName">—</div>
+      <div class="insp-pill ok" id="inspPill"><span class="dot g"></span> —</div>
     </div>
     <div class="insp-body" id="inspBody"></div>
   </aside>
-
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     VANILLA JS — State, data, UI
+     ═══════════════════════════════════════════════════════════════════════ -->
 <script>
-// ── CONFIGURATION ─────────────────────────────────────────────────────────────
-const API_URL = 'http://localhost:3001';
-const POLL_INTERVAL = 30000;
+const W = (() => {
+  // ── Constants ──────────────────────────────────────────────────────────────
+  const API = 'http://localhost:3001';
+  const POLL = 30000;
+  const DOT_CLS = { ok:'g', warn:'y', err:'r' };
+  const BADGE_TXT = { ok:'OK', warn:'WARN', err:'ERR' };
 
-// ── STATE ─────────────────────────────────────────────────────────────────────
-let lastFetchOk = false;
-let lastFetchTime = null;
-let selectedNodeId = 'openclaw';
-let gatewayData = null;    // latest /gateway response
-let seenEventIds = new Set();
+  // ── State ──────────────────────────────────────────────────────────────────
+  let CFG = null;       // config.json
+  let NODES = {};       // id → {name,status,label,diagnosis,metrics}
+  let selId = null;
+  let lastOk = false;
+  let lastTime = null;
+  let gwData = null;
+  let seenIds = new Set();
+  let logs = [];
+  let logOpen = false;
 
-const NODES = {
-  openclaw: { name:"🦞 OpenClaw", status:"ok", label:"CONNECTING…", alert:null, fixes:[], metrics:[], events:[] },
-  discord:  { name:"💬 Discord",  status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
-  claude:   { name:"✦ Claude API",status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
-  scraper:  { name:"⚙️ News Scraper", status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
-  x:        { name:"𝕏 X / Twitter",   status:"ok", label:"HEALTHY", alert:null, fixes:[], metrics:[], events:[] },
-};
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+  const fmtTime = iso => { try { return new Date(iso).toLocaleTimeString('en-US',{hour12:false}); } catch { return '—'; } };
+  const fmtShort = iso => { try { return new Date(iso).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'}); } catch { return '—'; } };
+  const fmtDur = s => { if(s==null)return '—'; if(s<60)return s+'s'; if(s<3600)return Math.floor(s/60)+'m '+s%60+'s'; return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; };
 
-const ALL_LOGS = [];
-let logExpanded = false;
-
-const STATUS_LABEL = {ok:'HEALTHY', warn:'DEGRADED', err:'FAILED'};
-const STATUS_BADGE = {ok:'OK', warn:'WARN', err:'ERR'};
-const DOT_CLASS    = {ok:'green', warn:'yellow', err:'red'};
-
-// ── HELPERS ───────────────────────────────────────────────────────────────────
-
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-function fmtTime(isoOrDate) {
-  try { return new Date(isoOrDate).toLocaleTimeString('en-US', {hour12:false}); } catch { return '—'; }
-}
-
-function fmtShortTime(isoOrDate) {
-  try { return new Date(isoOrDate).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'}); } catch { return '—'; }
-}
-
-function fmtDuration(secs) {
-  if (secs == null) return '—';
-  if (secs < 60) return `${secs}s`;
-  if (secs < 3600) return `${Math.floor(secs/60)}m ${secs%60}s`;
-  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
-  return `${h}h ${m}m`;
-}
-
-// Try to extract a readable message from the raw event msg (may be JSON)
-function cleanEventMsg(raw) {
-  if (!raw) return '';
-  try {
-    const obj = JSON.parse(raw);
-    // Common shapes: {"0":"...", "1":"..."} or {"message":"..."}
-    if (obj.message) return obj.message;
-    if (obj['1']) return obj['1'];
-    if (obj['0']) {
-      // Truncate long node deprecation warnings
-      const s = obj['0'];
-      if (s.includes('DeprecationWarning')) return 'Node.js DeprecationWarning (punycode)';
-      return s.length > 120 ? s.substring(0, 120) + '…' : s;
-    }
-    return raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
-  } catch {
-    return raw.length > 120 ? raw.substring(0, 120) + '…' : raw;
-  }
-}
-
-// ── LIVE DATA FETCHING ────────────────────────────────────────────────────────
-
-function buildOpenClawNode(agent, gw) {
-  // Determine status
-  let status, label;
-  if (agent.status === 'dead') {
-    status = 'err'; label = 'DEAD';
-  } else if (!agent.running) {
-    status = 'err'; label = 'PROCESS DOWN';
-  } else if (agent.status === 'err') {
-    status = 'err'; label = 'ERROR';
-  } else if (agent.status === 'warn') {
-    status = 'warn'; label = 'DEGRADED';
-  } else {
-    status = 'ok'; label = 'HEALTHY';
-  }
-
-  // Alert bar
-  let alert = null;
-  if (agent.status === 'dead') {
-    const mins = Math.round((agent.silenceSecs || 0) / 60);
-    alert = `Collector has been silent for ${mins} minutes. The machine or collector may be down.`;
-  } else if (!agent.running) {
-    alert = `OpenClaw gateway process is not running. Last heartbeat: ${agent.lastSeen || 'unknown'}.`;
-  } else if (status === 'err') {
-    alert = `OpenClaw is reporting errors. Check logs for details.`;
-  }
-
-  // Claude Code fix prompts — always present when err or dead
-  const fixes = [];
-  if (agent.status === 'dead') {
-    fixes.push({
-      type:'err',
-      text:'Collector is silent — the machine may be offline or the collector crashed.',
-      prompt:'My Watchclaw collector has stopped sending heartbeats. SSH into the machine, check if the collector process is running, and restart it. Also check if OpenClaw itself is still up.'
-    });
-    fixes.push({
-      type:'warn',
-      text:'If the machine is up, restart the collector manually.',
-      prompt:'Restart the Watchclaw collector: cd ~/Downloads && node collector.js > /tmp/watchclaw-collector.log 2>&1 &'
-    });
-  } else if (!agent.running) {
-    fixes.push({
-      type:'err',
-      text:'OpenClaw gateway process is down. Check if it crashed or was intentionally stopped.',
-      prompt:'My OpenClaw gateway process is down. Check if openclaw-gateway is running with: pgrep -fl openclaw. Show me the last 30 lines of /tmp/openclaw/*.log and restart the gateway if needed: launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist'
-    });
-    fixes.push({
-      type:'warn',
-      text:'Verify the LaunchAgent is configured for auto-restart.',
-      prompt:'Check if my OpenClaw LaunchAgent is loaded and set to restart on failure: launchctl list | grep openclaw && cat ~/Library/LaunchAgents/ai.openclaw.gateway.plist'
-    });
-  } else if (status === 'err') {
-    fixes.push({
-      type:'err',
-      text:'OpenClaw is running but reporting errors in the logs.',
-      prompt:'My OpenClaw agent is reporting errors. Show me the last 30 lines of /tmp/openclaw/*.log, check the process health, and help me fix what\'s wrong.'
-    });
-  } else if (status === 'warn') {
-    fixes.push({
-      type:'warn',
-      text:'Warnings detected in OpenClaw logs. May need attention if recurring.',
-      prompt:'My OpenClaw agent is showing warnings. Show me the last 20 lines of the OpenClaw log and tell me if anything needs fixing.'
-    });
-  }
-
-  // Metrics — combine heartbeat data with live gateway data
-  const memStr = (gw && gw.running && gw.memoryMb != null) ? `${gw.memoryMb} MB` : (agent.memoryMb != null ? `${agent.memoryMb} MB` : '—');
-  const cpuStr = (gw && gw.running && gw.cpuPercent != null) ? `${gw.cpuPercent}%` : '—';
-  const uptimeStr = (gw && gw.running) ? fmtDuration(gw.uptimeSeconds) : '—';
-  const pidStr = (gw && gw.running && gw.pid) ? `${gw.pid}` : '—';
-  const silenceStr = agent.silenceSecs != null ? (agent.silenceSecs < 120 ? `${agent.silenceSecs}s` : `${Math.round(agent.silenceSecs/60)}m`) : '—';
-
-  const metrics = [
-    ["Running", agent.running ? "Yes" : "No", agent.running ? "✅" : "❌", "Whether the OpenClaw process is currently running"],
-    ["Memory", memStr, "🧠", "RAM used by the OpenClaw gateway process"],
-    ["CPU", cpuStr, "⚡", "Current CPU usage of the gateway process"],
-    ["PID", pidStr, "🔢", "Process ID of the OpenClaw gateway"],
-    ["Uptime", uptimeStr, "⏱️", "How long the gateway has been running"],
-    ["Last beat", silenceStr + " ago", "♥", "Time since last collector heartbeat"],
+  // ── Clean event messages ───────────────────────────────────────────────────
+  const PATTERNS = [
+    [/restarts\/hour limit, skipping/, 'Subsystem hit restart limit — stopped retrying'],
+    [/health-monitor: restarting \(reason: stopped\)/, 'Health monitor restarting stopped subsystem'],
+    [/DeprecationWarning.*punycode/, 'Node.js deprecation warning (punycode module)'],
+    [/not linked.*WhatsApp|WhatsApp.*not linked/, 'WhatsApp session disconnected — needs re-linking'],
+    [/gateway not responding/, 'Gateway not responding to requests'],
+    [/ECONNREFUSED/, 'Connection refused — service is down'],
+    [/ETIMEDOUT/, 'Connection timed out'],
+    [/ENOTFOUND/, 'DNS lookup failed'],
   ];
+  function cleanMsg(raw) {
+    if (!raw) return '';
+    for (const [re, msg] of PATTERNS) if (re.test(raw)) return msg;
+    try {
+      const o = JSON.parse(raw);
+      const s = o.message || o['1'] || o['0'] || '';
+      return s.length > 120 ? s.substring(0,120)+'…' : s;
+    } catch {
+      const m = raw.match(/"1"\s*:\s*"([^"]+)"/);
+      if (m) return m[1].length > 120 ? m[1].substring(0,120)+'…' : m[1];
+      const m0 = raw.match(/"0"\s*:\s*"([^"]+)"/);
+      if (m0) { const s=m0[1]; if(s.includes('DeprecationWarning'))return 'Node.js deprecation warning (punycode)'; return s.length>120?s.substring(0,120)+'…':s; }
+    }
+    return raw.length > 120 ? raw.substring(0,120)+'…' : raw;
+  }
 
-  // Events — clean up the raw JSON messages
-  const events = (agent.recentEvents || []).map(ev => ({
-    time: fmtShortTime(ev.time || ev.created_at),
-    level: ev.level === 'error' ? 'error' : ev.level,
-    msg: cleanEventMsg(ev.msg),
-  }));
+  // ── Config loading ─────────────────────────────────────────────────────────
+  function initFromConfig(cfg) {
+    CFG = cfg;
+    selId = cfg.agent.id;
+    NODES[cfg.agent.id] = { name: cfg.agent.emoji+' '+cfg.agent.name, status:'ok', label:'CONNECTING…', diagnosis:null, metrics:[] };
+    NODES.model = { name: '🤖 '+cfg.model.name, status:'ok', label:'HEALTHY', diagnosis:null, metrics:[] };
+    for (const ch of cfg.channels) NODES[ch.id] = { name: ch.emoji+' '+ch.name, status:'ok', label:'HEALTHY', diagnosis:null, metrics:[] };
+    for (const a of cfg.automations) NODES[a.id] = { name: a.emoji+' '+a.name, status:'ok', label:'HEALTHY', diagnosis:null, metrics:[] };
+    buildSidebar();
+  }
 
-  return { name:"🦞 OpenClaw", status, label, alert, fixes, metrics, events };
-}
+  function buildSidebar() {
+    let h = '<div class="nav-sec"><div class="nav-label">Agent</div>';
+    h += navItem(CFG.agent.id, CFG.agent.emoji, CFG.agent.name, CFG.agent.description, true);
+    h += '</div>';
+    if (CFG.channels.length) {
+      h += '<div class="side-div"></div><div class="nav-sec"><div class="nav-label">Channels</div>';
+      for (const ch of CFG.channels) h += navItem(ch.id, ch.emoji, ch.name, ch.sub, false);
+      h += navItem('model','🤖',CFG.model.name, CFG.model.provider, false);
+      h += '</div>';
+    }
+    if (CFG.automations.length) {
+      h += '<div class="side-div"></div><div class="nav-sec"><div class="nav-label">Automations</div>';
+      for (const a of CFG.automations) h += navItem(a.id, a.emoji, a.name, a.sub, false);
+      h += '</div>';
+    }
+    document.getElementById('sidebarNav').innerHTML = h;
+  }
 
-async function fetchStatus() {
-  try {
-    const [statusRes, gwRes] = await Promise.all([
-      fetch(API_URL + '/status'),
-      fetch(API_URL + '/gateway'),
-    ]);
-    if (!statusRes.ok) throw new Error(`HTTP ${statusRes.status}`);
+  function navItem(id, emoji, name, sub, active) {
+    return `<div class="nav-item${active?' on':''}" onclick="W.select('${esc(id)}')">`
+      + `<span class="nav-emoji">${emoji}</span>`
+      + `<div class="nav-info"><div class="nav-name">${esc(name)}</div><div class="nav-sub">${esc(sub||'')}</div></div>`
+      + `<span class="badge ok" id="sb-${esc(id)}">OK</span></div>`;
+  }
 
-    const data = await statusRes.json();
-    gatewayData = gwRes.ok ? await gwRes.json() : null;
-    lastFetchOk = true;
-    lastFetchTime = new Date();
+  // ── Diagnosis engine ───────────────────────────────────────────────────────
+  function diagnose(events) {
+    for (const ev of events) {
+      const raw = ev.rawMsg || ev.msg || '';
+      if (raw.includes('restarts/hour limit, skipping')) {
+        const m = raw.match(/\[(\w+):(\w+)\]/);
+        const ch = m ? m[1] : 'subsystem';
+        return { pattern:'crash-loop', channel:ch,
+          summary: ch.charAt(0).toUpperCase()+ch.slice(1)+' subsystem has crashed repeatedly and hit the restart limit.',
+          cause: `[${ch}:default] health-monitor: hit 3 restarts/hour limit, skipping`, hl:'hit 3 restarts/hour limit' };
+      }
+      if (raw.includes('not linked') && /whatsapp/i.test(raw))
+        return { pattern:'wa-not-linked', channel:'whatsapp',
+          summary:'WhatsApp Web session is disconnected. The subsystem cannot start without an active linked session.',
+          cause:'WhatsApp default: enabled, configured, not linked, stopped, disconnected', hl:'not linked' };
+      if (raw.includes('gateway not responding'))
+        return { pattern:'gw-unresponsive', channel:'gateway',
+          summary:'OpenClaw process is running but the gateway HTTP endpoint is not responding.',
+          cause:'process running but gateway not responding (5s timeout)', hl:'gateway not responding' };
+    }
+    return null;
+  }
 
-    // Update monitored agents
-    for (const agent of data.agents) {
-      const key = agent.agent.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (key === 'openclaw') {
-        NODES.openclaw = buildOpenClawNode(agent, gatewayData);
+  function buildDiagnosis(agent, gw) {
+    let status, label;
+    if (agent.status==='dead')      { status='err';  label='DEAD'; }
+    else if (!agent.running)        { status='err';  label='PROCESS DOWN'; }
+    else if (agent.status==='err')  { status='err';  label='ERROR'; }
+    else if (agent.status==='warn') { status='warn'; label='DEGRADED'; }
+    else                            { status='ok';   label='HEALTHY'; }
 
-        // Feed events into the log strip (deduplicated)
-        for (const ev of (agent.recentEvents || []).slice(0, 10)) {
-          if (seenEventIds.has(ev.id)) continue;
-          seenEventIds.add(ev.id);
-          ALL_LOGS.unshift({
-            _id: ev.id,
-            time: fmtTime(ev.time || ev.created_at),
-            node: 'openclaw', cls: 'openclaw',
-            level: ev.level === 'error' ? 'error' : ev.level,
-            msg: cleanEventMsg(ev.msg),
-          });
+    const clean = (agent.recentEvents||[]).map(ev => ({
+      time: fmtShort(ev.time||ev.created_at), level: ev.level==='error'?'error':ev.level,
+      msg: cleanMsg(ev.msg), rawMsg: ev.msg||'' }));
+
+    const diag = status!=='ok' ? diagnose(clean) : null;
+    let d = null;
+    const agentName = CFG ? CFG.agent.name : 'OpenClaw';
+
+    if (agent.status==='dead') {
+      const mins = Math.round((agent.silenceSecs||0)/60);
+      d = { statusSummary:`Collector has been silent for ${mins} minutes. The machine may be offline or the collector crashed.`,
+        rootCause:`No heartbeat received for ${mins} minutes (threshold: 5 min)`, rootCauseHL:`silent for ${mins} minutes`,
+        impact:`No visibility into ${agentName} health. Messages may not be processing.`,
+        prompt:'My Watchclaw collector stopped sending heartbeats. Check: pm2 status and pgrep -fl openclaw. Restart both if needed.' };
+    } else if (!agent.running) {
+      d = { statusSummary:`${agentName} gateway process is not running. All message processing has stopped.`,
+        rootCause:'pgrep -f "openclaw" returned no matching processes', rootCauseHL:'no matching processes',
+        impact:'All channels are down — no messages are being received or sent.',
+        prompt:`My ${agentName} gateway is down. Check: tail -30 /tmp/openclaw/*.log then restart: launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
+    } else if (diag?.pattern==='crash-loop') {
+      const impactMap = { whatsapp:'WhatsApp messages are not being received or sent. Discord still works.', discord:'Discord messages are not being received or sent.', telegram:'Telegram messages are down.' };
+      d = { statusSummary:diag.summary, rootCause:diag.cause, rootCauseHL:diag.hl,
+        impact: impactMap[diag.channel]||`The ${diag.channel} channel is completely down.`,
+        prompt:`My ${agentName} ${diag.channel} subsystem is in a crash loop. Run: openclaw channels status --probe. If ${diag.channel} shows "not linked", run: openclaw channels login --channel ${diag.channel}. Then restart the gateway.` };
+    } else if (diag?.pattern==='wa-not-linked') {
+      d = { statusSummary:diag.summary, rootCause:diag.cause, rootCauseHL:diag.hl,
+        impact:'WhatsApp messages are not being received or sent. QR code needs scanning.',
+        prompt:'Run: openclaw channels login --channel whatsapp then scan the QR code with your phone. After linking, restart the gateway to clear the restart counter.' };
+    } else if (diag?.pattern==='gw-unresponsive') {
+      d = { statusSummary:diag.summary, rootCause:diag.cause, rootCauseHL:diag.hl,
+        impact:'All message processing is likely frozen. The process may be deadlocked.',
+        prompt:`Check: ps aux | grep openclaw and tail -50 /tmp/openclaw/*.log. If hung, restart: kill $(pgrep -f openclaw) && sleep 2 && launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
+    } else if (status==='err') {
+      const ev = clean.find(e=>e.level==='error');
+      let msg = ev?.msg||''; const raw = ev?.rawMsg||'';
+      if (!msg) { const m=raw.match(/"1"\s*:\s*"([^"]+)"/); if(m) msg=m[1].substring(0,150); }
+      const hl = (msg.match(/hit \d+ restarts|not linked|ECONNREFUSED|ETIMEDOUT|crash|fatal/i)||[])[0]||'error';
+      d = { statusSummary:`${agentName} is running but reporting errors.`, rootCause:msg||'Unknown error — check /tmp/openclaw/*.log', rootCauseHL:hl,
+        impact:'Some or all message processing may be affected.',
+        prompt:`My ${agentName} is reporting errors. Run: tail -30 /tmp/openclaw/$(ls -t /tmp/openclaw/ | head -1) and openclaw channels status --probe. Tell me what's broken.` };
+    } else if (status==='warn') {
+      const ev = clean.find(e=>e.level==='warn');
+      let msg = ev?.msg||''; const raw = ev?.rawMsg||'';
+      if (!msg) { const m=raw.match(/"1"\s*:\s*"([^"]+)"/); if(m) msg=m[1].substring(0,150); }
+      const hl = (msg.match(/restart|timeout|limit|deprecated|slow|retry/i)||[])[0]||'warning';
+      d = { statusSummary:`${agentName} is running with warnings. This may resolve on its own.`, rootCause:msg||'Warning in logs', rootCauseHL:hl,
+        impact:'Message processing likely still working but may be degraded.',
+        prompt:`My ${agentName} is showing warnings. Run: tail -20 /tmp/openclaw/$(ls -t /tmp/openclaw/ | head -1) and openclaw channels status --probe.` };
+    }
+
+    // Metrics
+    const mem = (gw?.running&&gw.memoryMb!=null)?gw.memoryMb+' MB':(agent.memoryMb!=null?agent.memoryMb+' MB':'—');
+    const cpu = (gw?.running&&gw.cpuPercent!=null)?gw.cpuPercent+'%':'—';
+    const up  = gw?.running?fmtDur(gw.uptimeSeconds):'—';
+    const pid = (gw?.running&&gw.pid)?''+gw.pid:'—';
+    const beat = agent.silenceSecs!=null?(agent.silenceSecs<120?agent.silenceSecs+'s':Math.round(agent.silenceSecs/60)+'m'):'—';
+
+    return {
+      name: CFG?CFG.agent.emoji+' '+CFG.agent.name:'🦞 OpenClaw', status, label, diagnosis: d,
+      metrics: [
+        ['Running',agent.running?'Yes':'No',agent.running?'✅':'❌'],
+        ['Memory',mem,'🧠'], ['CPU',cpu,'⚡'], ['PID',pid,'🔢'],
+        ['Uptime',up,'⏱️'], ['Last beat',beat+' ago','♥'],
+      ]
+    };
+  }
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+  async function poll() {
+    if (!CFG) return;
+    try {
+      const [sr, gr] = await Promise.all([fetch(API+'/status'), fetch(API+'/gateway')]);
+      if (!sr.ok) throw new Error(sr.status);
+      const data = await sr.json();
+      gwData = gr.ok ? await gr.json() : null;
+      lastOk = true; lastTime = new Date();
+
+      const aid = CFG.agent.id;
+      for (const a of data.agents) {
+        if (a.agent.toLowerCase().replace(/[^a-z0-9]/g,'')=== aid.toLowerCase().replace(/[^a-z0-9]/g,'')) {
+          NODES[aid] = buildDiagnosis(a, gwData);
+          // Feed log strip
+          for (const ev of (a.recentEvents||[]).slice(0,10)) {
+            if (seenIds.has(ev.id)) continue; seenIds.add(ev.id);
+            logs.unshift({ _id:ev.id, time:fmtTime(ev.time||ev.created_at), node:aid,
+              level:ev.level==='error'?'error':ev.level, msg:cleanMsg(ev.msg) });
+          }
+          if (logs.length>50) logs.length=50;
         }
-        if (ALL_LOGS.length > 50) ALL_LOGS.length = 50;
       }
-    }
 
-    // Update dependent nodes based on OpenClaw state
-    const oc = NODES.openclaw;
-    if (oc.status === 'ok') {
-      NODES.discord.status = 'ok'; NODES.discord.label = 'HEALTHY';
-      NODES.discord.alert = null; NODES.discord.fixes = [];
-      NODES.claude.status = 'ok'; NODES.claude.label = 'HEALTHY';
-      NODES.claude.alert = null; NODES.claude.fixes = [];
+      // Dependent nodes
+      const oc = NODES[aid];
+      if (oc) {
+        for (const ch of CFG.channels) {
+          if (!NODES[ch.id]) continue;
+          if (oc.status==='ok') { NODES[ch.id].status='ok'; NODES[ch.id].label='HEALTHY'; NODES[ch.id].diagnosis=null; }
+          else if (oc.status==='err') {
+            NODES[ch.id].status='warn'; NODES[ch.id].label='DEGRADED';
+            NODES[ch.id].diagnosis = { statusSummary:ch.name+' depends on '+CFG.agent.name+'. '+CFG.agent.name+' is currently down.',
+              rootCause:'Upstream dependency '+CFG.agent.name+' is in '+oc.label+' state', rootCauseHL:oc.label,
+              impact:ch.name+' will not function until '+CFG.agent.name+' recovers.', prompt:'Fix '+CFG.agent.name+' first.' };
+          } else { NODES[ch.id].status='ok'; NODES[ch.id].label='HEALTHY'; NODES[ch.id].diagnosis=null; }
+          NODES[ch.id].metrics = [];
+        }
+        if (NODES.model) {
+          NODES.model.status = oc.status==='err'?'warn':'ok';
+          NODES.model.label = oc.status==='err'?'DEGRADED':'HEALTHY';
+          NODES.model.diagnosis = oc.status==='err'?{ statusSummary:CFG.model.name+' is reachable but '+CFG.agent.name+' is not making calls.',
+            rootCause:'Upstream '+CFG.agent.name+' is '+oc.label, rootCauseHL:oc.label,
+            impact:'No inference happening.', prompt:'Fix '+CFG.agent.name+' first.' }:null;
+          NODES.model.metrics = [['Model',CFG.model.id,'🤖'],['Input','$'+CFG.model.costPerMillionInput+'/M','📈'],['Output','$'+CFG.model.costPerMillionOutput+'/M','📈']];
+        }
+        for (const a of CFG.automations) { if(NODES[a.id]) NODES[a.id].metrics=[]; }
+      }
+      updateUI();
+    } catch { lastOk=false; updateBoxes(); }
+  }
+
+  // ── UI updates ─────────────────────────────────────────────────────────────
+  function updateUI() { updateFlow(); updateBadges(); updateChip(); updateBoxes(); renderLogs(); renderInspector(); }
+
+  function updateFlow() { if(window.updateReactFlow) window.updateReactFlow(NODES, selId); }
+
+  function updateBadges() {
+    for (const id of Object.keys(NODES)) {
+      const sb = document.getElementById('sb-'+id);
+      if (sb) { sb.className='badge '+NODES[id].status; sb.textContent=BADGE_TXT[NODES[id].status]||'?'; }
+    }
+    const aid = CFG?.agent.id;
+    const sub = document.querySelector('#sb-'+aid)?.closest('.nav-item')?.querySelector('.nav-sub');
+    if (sub && NODES[aid]) {
+      const n = NODES[aid];
+      sub.textContent = n.status==='err'?n.label.toLowerCase():n.status==='warn'?'warnings detected':CFG.agent.description;
+    }
+  }
+
+  function updateChip() {
+    const stale = lastTime && (Date.now()-lastTime.getTime())>120000;
+    const errs = Object.values(NODES).filter(n=>n.status==='err').length;
+    const warns = Object.values(NODES).filter(n=>n.status==='warn').length;
+    const chip=document.getElementById('sysChip'), dot=document.getElementById('sysDot'), lbl=document.getElementById('sysLbl');
+    if (stale) { chip.className='chip warn'; dot.className='dot y'; lbl.textContent='Data may be stale'; }
+    else if (errs) { chip.className='chip err'; dot.className='dot r'; lbl.textContent=errs+' issue'+(errs>1?'s':'')+' detected'; }
+    else if (warns) { chip.className='chip warn'; dot.className='dot y'; lbl.textContent=warns+' warning'+(warns>1?'s':''); }
+    else { chip.className='chip ok'; dot.className='dot g'; lbl.textContent='All systems go'; }
+    const b=document.getElementById('staleBanner');
+    b.classList.toggle('on', !!stale);
+    if (stale && lastTime) document.getElementById('staleAge').textContent=Math.round((Date.now()-lastTime.getTime())/60000);
+  }
+
+  function updateBoxes() {
+    const hv=document.getElementById('hbVal'), hs=document.getElementById('hbSub'), gv=document.getElementById('gwVal'), gs=document.getElementById('gwSub');
+    if (!lastOk) { hv.innerHTML='<span style="color:var(--red)">● Disconnected</span>'; hs.textContent='Cannot reach server'; }
+    else { hv.innerHTML='<span style="color:var(--green)">● Live</span>'; hs.textContent='Last poll '+(lastTime?Math.round((Date.now()-lastTime.getTime())/1000):'?')+'s ago'; }
+    if (!gwData) { gv.innerHTML='<span style="color:var(--muted)">● Unknown</span>'; gs.textContent='No data'; }
+    else if (gwData.running) {
+      gv.innerHTML='<span style="color:var(--green)">● Running</span>';
+      const p=[]; if(gwData.memoryMb!=null)p.push(gwData.memoryMb+' MB'); if(gwData.cpuPercent!=null)p.push(gwData.cpuPercent+'% CPU'); if(gwData.uptimeSeconds!=null)p.push('up '+fmtDur(gwData.uptimeSeconds));
+      gs.textContent=p.join(' · ')||'PID '+gwData.pid;
+    } else { gv.innerHTML='<span style="color:var(--red)">● Down</span>'; gs.textContent='Gateway process not found'; }
+  }
+
+  // ── Log strip ──────────────────────────────────────────────────────────────
+  function toggleLog() {
+    logOpen=!logOpen;
+    document.getElementById('logStrip').className='log-strip '+(logOpen?'open':'shut');
+    document.getElementById('logTgl').textContent=logOpen?'▼ collapse':'▲ expand';
+  }
+  function renderLogs() {
+    const ec=logs.filter(l=>l.level==='error').length, wc=logs.filter(l=>l.level==='warn').length;
+    const cnt=document.getElementById('logCnt');
+    if (ec) { cnt.textContent=ec+' error'+(ec>1?'s':''); cnt.style.display=''; cnt.style.background=''; cnt.style.color=''; cnt.style.borderColor=''; }
+    else if (wc) { cnt.textContent=wc+' warning'+(wc>1?'s':''); cnt.style.display=''; cnt.style.background='var(--yel-bg)'; cnt.style.color='var(--yel)'; cnt.style.borderColor='var(--yel-bdr)'; }
+    else cnt.style.display='none';
+    document.getElementById('logFeed').innerHTML = logs.length ? logs.map(l =>
+      `<div class="log-row ${l.level==='error'?'e':l.level==='warn'?'w':''}" onclick="W.select('${esc(l.node)}')">`
+      +`<span class="log-t">${esc(l.time)}</span><span class="log-n">${esc(l.node)}</span>`
+      +`<span class="log-lv ${esc(l.level)}">${l.level==='error'?'ERR':esc(l.level.toUpperCase())}</span>`
+      +`<span class="log-msg">${esc(l.msg)}</span></div>`).join('')
+      : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Waiting for events…</div>';
+  }
+
+  // ── Inspector ──────────────────────────────────────────────────────────────
+  function select(id) {
+    selId = id;
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
+    const sb = document.getElementById('sb-'+id);
+    if (sb) { const ni=sb.closest('.nav-item'); if(ni) ni.classList.add('on'); }
+    if (window.updateReactFlow) window.updateReactFlow(NODES, selId);
+    renderInspector();
+  }
+
+  function renderInspector() {
+    const n = NODES[selId]; if(!n) return;
+    document.getElementById('inspName').textContent = n.name;
+    const pill = document.getElementById('inspPill');
+    pill.className = 'insp-pill '+n.status;
+    pill.innerHTML = '<span class="dot '+(DOT_CLS[n.status]||'r')+'"></span> '+esc(n.label);
+
+    let h = '';
+    const d = n.diagnosis;
+    if (d) {
+      const icon = n.status==='err'?'🔴':'🟡';
+      h += `<div class="diag-status ${esc(n.status)}"><span class="diag-status-icon">${icon}</span><span class="diag-status-text">${esc(d.statusSummary)}</span></div>`;
+      // Root cause
+      h += '<div class="diag-sec c-red"><div class="insp-label">Root Cause</div>';
+      const ct = esc(d.rootCause);
+      const hl = d.rootCauseHL ? ct.replace(esc(d.rootCauseHL), '<span class="diag-hl">'+esc(d.rootCauseHL)+'</span>') : ct;
+      h += '<div class="diag-cause">'+hl+'</div></div>';
+      // Impact
+      h += '<div class="diag-sec c-orange"><div class="insp-label">Impact</div><div class="diag-impact"><span style="flex-shrink:0">⚡</span><span>'+esc(d.impact)+'</span></div></div>';
+      // Fix
+      h += '<div class="diag-sec c-blue"><div class="insp-label">✦ Fix with Claude Code</div>'
+        + '<div class="prompt-block" onclick="W.copyPrompt(this)" data-prompt="'+esc(d.prompt)+'">'
+        + '<div class="prompt-lbl">✦ Copy this prompt into Claude Code</div>'+esc(d.prompt)
+        + '<span class="prompt-copy">Copy</span></div></div>';
     } else {
-      // Discord and Claude depend on OpenClaw — mark as degraded if OpenClaw is down
-      if (oc.status === 'err') {
-        NODES.discord.status = 'warn'; NODES.discord.label = 'DEGRADED';
-        NODES.discord.alert = 'OpenClaw is down — Discord bot replies will not work until OpenClaw recovers.';
-        NODES.discord.fixes = [{type:'warn', text:'Fix OpenClaw first. Discord bot depends on it for replies.', prompt:null}];
-        NODES.claude.status = 'warn'; NODES.claude.label = 'DEGRADED';
-        NODES.claude.alert = 'Claude API is reachable but OpenClaw is not consuming it.';
-        NODES.claude.fixes = [{type:'info', text:'Claude API itself is fine. Fix OpenClaw to resume inference calls.', prompt:null}];
-      }
+      h += '<div class="no-issues"><div style="font-size:24px;margin-bottom:6px">✓</div>'
+        + '<div style="font-size:12px;color:var(--green);font-weight:600">No issues detected</div>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:3px">Checked '
+        + (lastTime?Math.round((Date.now()-lastTime.getTime())/1000)+'s ago':'never')+'</div></div>';
     }
-
-    // Build metrics for dependent nodes
-    NODES.discord.metrics = [
-      ["Latency", "—", "📡", "Round-trip time to Discord gateway"],
-      ["Bot status", oc.status === 'ok' ? "Online" : "Impaired", oc.status === 'ok' ? "✅" : "⚠️", "Whether the bot can respond via OpenClaw"],
-      ["Uptime", "—", "✅", "Gateway uptime over 30 days"],
-      ["Channels", "—", "#️⃣", "Channels the bot is active in"],
-    ];
-    NODES.discord.events = oc.status !== 'ok' ? [{time: fmtShortTime(new Date()), level:'warn', msg:'OpenClaw dependency is ' + oc.label}] : [];
-
-    NODES.claude.metrics = [
-      ["Latency", "—", "⏱️", "Average inference response time"],
-      ["Tokens/day", "—", "📈", "Total tokens used in last 24h"],
-      ["Model", "sonnet-4-6", "🤖", "Claude model in use"],
-      ["Errors", "0", "✅", "API errors in the last hour"],
-    ];
-    NODES.claude.events = [];
-
-    NODES.scraper.metrics = [
-      ["Last run", "—", "🕐", "Timestamp of the most recent run"],
-      ["Runs today", "—", "📊", "Completed vs scheduled runs today"],
-      ["Errors", "0", "❌", "Failed attempts today"],
-      ["Next retry", "—", "⏰", "Scheduled time for next attempt"],
-    ];
-
-    NODES.x.metrics = [
-      ["Status", "—", "🚫", "Current HTTP status from X API"],
-      ["Resets in", "—", "⏳", "Time until rate limit resets"],
-      ["Limit", "500K/mo", "📋", "Monthly fetch limit"],
-      ["Used", "—", "📉", "Tweets fetched this month"],
-    ];
-
-    updateUI();
-  } catch (err) {
-    lastFetchOk = false;
-    updateSidebarBoxes();
-  }
-}
-
-// ── UI UPDATE ─────────────────────────────────────────────────────────────────
-
-function updateUI() {
-  updateFlowNodes();
-  updateSidebarBadges();
-  updateSystemChip();
-  updateSidebarBoxes();
-  renderLogs();
-  renderInspector(selectedNodeId);
-}
-
-function updateFlowNodes() {
-  if (window.updateReactFlow) window.updateReactFlow(NODES, selectedNodeId);
-}
-
-function updateSidebarBadges() {
-  const order = ['openclaw','discord','claude','scraper','x'];
-  for (const id of order) {
-    const n = NODES[id];
-    const sb = document.getElementById('sb-' + id);
-    if (sb) {
-      sb.className = 'status-badge ' + n.status;
-      sb.textContent = STATUS_BADGE[n.status] || n.status.toUpperCase();
+    // Metrics
+    if (n.metrics?.length) {
+      h += '<div class="metrics-sec"><div class="insp-label">Metrics</div><div class="metrics-grid">';
+      n.metrics.forEach(([l,v,icon]) => { h += `<div class="metric"><span class="metric-icon">${icon}</span><div class="metric-v">${esc(v)}</div><div class="metric-l">${esc(l)}</div></div>`; });
+      h += '</div></div>';
     }
-  }
-  // Update nav-sub for openclaw with live detail
-  const ocSub = document.querySelector('#sb-openclaw')?.closest('.nav-item')?.querySelector('.nav-sub');
-  if (ocSub) {
-    const oc = NODES.openclaw;
-    if (oc.status === 'err') ocSub.textContent = oc.label.toLowerCase();
-    else if (oc.status === 'warn') ocSub.textContent = 'warnings detected';
-    else ocSub.textContent = 'Discord · Claude API';
-  }
-}
-
-function isDataStale() {
-  if (!lastFetchTime) return false;
-  return (Date.now() - lastFetchTime.getTime()) > 120000; // 2 minutes
-}
-
-function updateStaleBanner() {
-  const banner = document.getElementById('staleBanner');
-  const stale = isDataStale();
-  banner.classList.toggle('visible', stale);
-  if (stale && lastFetchTime) {
-    document.getElementById('staleAge').textContent = Math.round((Date.now() - lastFetchTime.getTime()) / 60000);
-  }
-}
-
-function updateSystemChip() {
-  const stale = isDataStale();
-  const errors = Object.values(NODES).filter(x => x.status === 'err').length;
-  const warns  = Object.values(NODES).filter(x => x.status === 'warn').length;
-  const chip = document.getElementById('sysChip');
-  const sysDot = document.getElementById('sysDot');
-  const sysLbl = document.getElementById('sysLabel');
-
-  if (stale) {
-    chip.className = 'status-chip warn'; sysDot.className = 'dot yellow';
-    sysLbl.textContent = 'Data may be stale';
-  } else if (errors > 0) {
-    chip.className = 'status-chip err'; sysDot.className = 'dot red';
-    sysLbl.textContent = errors + ' issue' + (errors > 1 ? 's' : '') + ' detected';
-  } else if (warns > 0) {
-    chip.className = 'status-chip warn'; sysDot.className = 'dot yellow';
-    sysLbl.textContent = warns + ' warning' + (warns > 1 ? 's' : '');
-  } else {
-    chip.className = 'status-chip ok'; sysDot.className = 'dot green';
-    sysLbl.textContent = 'All systems go';
-  }
-  updateStaleBanner();
-}
-
-function updateSidebarBoxes() {
-  const hbVal = document.getElementById('hbVal');
-  const hbSub = document.getElementById('hbSub');
-  const gwVal = document.getElementById('gwVal');
-  const gwDetail = document.getElementById('gwDetail');
-
-  // Heartbeat box
-  if (!lastFetchOk) {
-    hbVal.innerHTML = '<span style="color:var(--red)">● Disconnected</span>';
-    hbSub.textContent = 'Cannot reach Watchclaw server';
-  } else {
-    hbVal.innerHTML = '<span style="color:var(--green)">● Live</span>';
-    const ago = lastFetchTime ? Math.round((Date.now() - lastFetchTime.getTime()) / 1000) : '?';
-    hbSub.textContent = 'Last poll ' + ago + 's ago';
+    document.getElementById('inspBody').innerHTML = h;
   }
 
-  // Gateway box
-  if (!gatewayData) {
-    gwVal.innerHTML = '<span style="color:var(--muted)">● Unknown</span>';
-    gwDetail.textContent = 'No data yet';
-  } else if (gatewayData.running) {
-    gwVal.innerHTML = '<span style="color:var(--green)">● Running</span>';
-    const parts = [];
-    if (gatewayData.memoryMb != null) parts.push(gatewayData.memoryMb + ' MB');
-    if (gatewayData.cpuPercent != null) parts.push(gatewayData.cpuPercent + '% CPU');
-    if (gatewayData.uptimeSeconds != null) parts.push('up ' + fmtDuration(gatewayData.uptimeSeconds));
-    gwDetail.textContent = parts.join(' · ') || 'PID ' + gatewayData.pid;
-  } else {
-    gwVal.innerHTML = '<span style="color:var(--red)">● Down</span>';
-    gwDetail.textContent = 'Gateway process not found';
-  }
-}
-
-// ── CLOCK ─────────────────────────────────────────────────────────────────────
-setInterval(() => {
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
-  if (lastFetchOk && lastFetchTime) {
-    const ago = Math.round((Date.now() - lastFetchTime.getTime()) / 1000);
-    document.getElementById('hbSub').textContent = 'Last poll ' + ago + 's ago';
-  }
-  updateSystemChip(); // re-check stale state every second
-}, 1000);
-document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
-
-// ── LOG STRIP ─────────────────────────────────────────────────────────────────
-function toggleLog() {
-  logExpanded = !logExpanded;
-  document.getElementById('logStrip').className = 'log-strip ' + (logExpanded ? 'expanded' : 'collapsed');
-  document.getElementById('logToggle').textContent = logExpanded ? '▼ collapse' : '▲ expand';
-}
-
-function renderLogs() {
-  const errCount = ALL_LOGS.filter(l => l.level === 'error').length;
-  const warnCount = ALL_LOGS.filter(l => l.level === 'warn').length;
-  const countEl = document.getElementById('errCount');
-  if (errCount > 0) {
-    countEl.textContent = errCount + ' error' + (errCount !== 1 ? 's' : '');
-    countEl.style.display = '';
-  } else if (warnCount > 0) {
-    countEl.textContent = warnCount + ' warning' + (warnCount !== 1 ? 's' : '');
-    countEl.style.background = 'var(--yellow-bg)'; countEl.style.color = 'var(--yellow)'; countEl.style.borderColor = 'var(--yellow-border)';
-    countEl.style.display = '';
-  } else {
-    countEl.style.display = 'none';
+  function copyPrompt(el) {
+    navigator.clipboard.writeText(el.getAttribute('data-prompt')).catch(()=>{});
+    const btn=el.querySelector('.prompt-copy'), orig=btn.textContent;
+    btn.textContent='✓ Copied!'; btn.style.background='var(--green)'; btn.style.color='#fff'; btn.style.borderColor='var(--green)';
+    setTimeout(()=>{ btn.textContent=orig; btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; },2000);
   }
 
-  document.getElementById('logFeed').innerHTML = ALL_LOGS.length > 0 ? ALL_LOGS.map(l => `
-    <div class="log-row ${l.level === 'error' ? 'err-row' : l.level === 'warn' ? 'warn-row' : ''}" onclick="selectNode('${esc(l.node)}')">
-      <span class="log-t">${esc(l.time)}</span>
-      <span class="log-n ${esc(l.cls)}">${esc(l.node)}</span>
-      <span class="log-lv ${esc(l.level)}">${l.level === 'error' ? 'ERR' : esc(l.level.toUpperCase())}</span>
-      <span class="log-msg">${esc(l.msg)}</span>
-    </div>`).join('') : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Waiting for events…</div>';
-}
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  setInterval(()=>{
+    document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-US',{hour12:false});
+    if(lastOk&&lastTime) document.getElementById('hbSub').textContent='Last poll '+Math.round((Date.now()-lastTime.getTime())/1000)+'s ago';
+    updateChip();
+  }, 1000);
 
-// ── NODE SELECTION & INSPECTOR ────────────────────────────────────────────────
-function selectNode(id) {
-  selectedNodeId = id;
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const order = ['openclaw','discord','claude','scraper','x'];
-  const navItems = document.querySelectorAll('.nav-item');
-  const i = order.indexOf(id);
-  if (navItems[i]) navItems[i].classList.add('active');
-  if (window.updateReactFlow) window.updateReactFlow(NODES, selectedNodeId);
-  renderInspector(id);
-}
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  fetch(API+'/config').then(r=>r.json()).then(cfg=>{
+    initFromConfig(cfg);
+    window._watchclawConfig = cfg;
+    window._watchclawNodes = NODES;
+    poll(); setInterval(poll, POLL);
+    select(cfg.agent.id); renderLogs();
+  }).catch(err=>{
+    console.error('[config]', err);
+    poll(); setInterval(poll, POLL); renderLogs();
+  });
 
-function renderInspector(id) {
-  const n = NODES[id];
-  document.getElementById('inspName').textContent = n.name;
-  const pill = document.getElementById('inspPill');
-  pill.className = 'insp-pill ' + n.status;
-  pill.innerHTML = '<span class="dot ' + (DOT_CLASS[n.status] || 'red') + '"></span> ' + esc(n.label);
-
-  let html = '';
-
-  // Alert bar
-  if (n.alert) {
-    html += '<div class="alert-bar"><span class="alert-bar-icon">⚠</span><span>' + esc(n.alert) + '</span></div>';
-  }
-
-  // Fixes with Claude Code prompts
-  if (n.fixes.length > 0) {
-    html += '<div class="fixes-section"><div class="insp-label">✦ Ask Claude Code</div>';
-    n.fixes.forEach((f, i) => {
-      html += '<div class="fix-card ' + esc(f.type) + '"><span class="fix-num">' + (i+1) + '.</span>' + esc(f.text);
-      if (f.prompt) {
-        html += '<div class="prompt-block" onclick="copyPrompt(this)" data-prompt="' + esc(f.prompt) + '">'
-          + '<div class="prompt-label">✦ Claude Code prompt</div>'
-          + esc(f.prompt)
-          + '<span class="prompt-copy-btn">Copy prompt</span></div>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
-  } else {
-    html += '<div class="no-issues"><div style="font-size:24px;margin-bottom:6px">✓</div>'
-      + '<div style="font-size:12px;color:var(--green);font-weight:600">No issues detected</div>'
-      + '<div style="font-size:10px;color:var(--muted);margin-top:3px">Checked '
-      + (lastFetchTime ? Math.round((Date.now() - lastFetchTime.getTime()) / 1000) + 's ago' : 'never')
-      + '</div></div>';
-  }
-
-  // Metrics
-  if (n.metrics.length > 0) {
-    html += '<div class="metrics-section"><div class="insp-label">Metrics</div><div class="metrics-grid">';
-    n.metrics.forEach(([l, v, icon, tip]) => {
-      html += '<div class="metric-cell">'
-        + '<div class="metric-info">i<div class="metric-tooltip">' + esc(tip) + '</div></div>'
-        + '<span class="metric-icon">' + icon + '</span>'
-        + '<div class="metric-v">' + esc(v) + '</div>'
-        + '<div class="metric-l">' + esc(l) + '</div></div>';
-    });
-    html += '</div></div>';
-  }
-
-  // Events
-  html += '<div class="events-section"><div class="insp-label">Recent Events</div>';
-  if (n.events.length > 0) {
-    n.events.forEach(e => {
-      html += '<div class="ev-row"><span class="ev-t">' + esc(e.time) + '</span>'
-        + '<span class="ev-lv ' + esc(e.level) + '">' + esc(e.level.toUpperCase()) + '</span>'
-        + '<span class="ev-msg">' + esc(e.msg) + '</span></div>';
-    });
-  } else {
-    html += '<div style="font-size:11px;color:var(--muted);padding:8px 0">No events yet</div>';
-  }
-  html += '</div>';
-
-  document.getElementById('inspBody').innerHTML = html;
-}
-
-function copyPrompt(el) {
-  const prompt = el.getAttribute('data-prompt');
-  navigator.clipboard.writeText(prompt).catch(() => {});
-  const btn = el.querySelector('.prompt-copy-btn');
-  const orig = btn.textContent;
-  btn.textContent = '✓ Copied!';
-  btn.style.background = 'var(--green)'; btn.style.color = 'white'; btn.style.borderColor = 'var(--green)';
-  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
-}
-
-// ── INIT & POLLING ────────────────────────────────────────────────────────────
-// Expose state for the React Flow module (loads after this script)
-window._watchclawNodes = NODES;
-window._watchclawSelectedId = selectedNodeId;
-
-// Patch selectNode to keep the bridge vars in sync
-const _origSelectNode = selectNode;
-window.selectNode = function(id) {
-  window._watchclawSelectedId = id;
-  _origSelectNode(id);
-};
-
-fetchStatus();
-setInterval(fetchStatus, POLL_INTERVAL);
-selectNode('openclaw');
-renderLogs();
+  // Public API for React Flow bridge + onclick handlers
+  return { select, toggleLog, copyPrompt, NODES, get selId(){ return selId; } };
+})();
 </script>
 
-<!-- React Flow module — loaded after vanilla JS is ready -->
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     REACT FLOW MODULE — Swim lane diagram
+     ═══════════════════════════════════════════════════════════════════════ -->
 <script type="module">
 import React, { createElement as h, useState, useCallback, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ReactFlow, Background, Handle, Position, MarkerType } from '@xyflow/react';
 
-const DOT = { ok: 'green', warn: 'yellow', err: 'red' };
+const DOT = { ok:'g', warn:'y', err:'r' };
 
+// ── Status node ──────────────────────────────────────────────────────────────
 function StatusNode({ data }) {
-  return h('div', { className: 'rf-node s-' + data.status },
-    h(Handle, { type: 'target', position: Position.Left, id: 'left', className: 'rf-handle' }),
-    h(Handle, { type: 'target', position: Position.Bottom, id: 'bottom', className: 'rf-handle' }),
-    h('div', { className: 'rf-node-dot ' + (DOT[data.status] || 'red') }),
-    h('span', { className: 'rf-node-icon' }, data.emoji),
-    h('div', { className: 'rf-node-name' }, data.name),
-    h('div', { className: 'rf-node-badge ' + data.status }, data.label),
-    h(Handle, { type: 'source', position: Position.Right, id: 'right', className: 'rf-handle' }),
-    h(Handle, { type: 'source', position: Position.Top, id: 'top', className: 'rf-handle' })
+  return h('div', { className: 'rf-node s-'+data.status },
+    h(Handle,{type:'target',position:Position.Left,id:'left',className:'rf-handle'}),
+    h(Handle,{type:'target',position:Position.Bottom,id:'bottom',className:'rf-handle'}),
+    h('div',{className:'rf-dot '+(DOT[data.status]||'r')}),
+    h('span',{className:'rf-icon'},data.emoji),
+    h('div',{className:'rf-name'},data.name),
+    h('div',{className:'rf-badge '+data.status},data.label),
+    h(Handle,{type:'source',position:Position.Right,id:'right',className:'rf-handle'}),
+    h(Handle,{type:'source',position:Position.Top,id:'top',className:'rf-handle'})
   );
 }
 
-const nodeTypes = { statusNode: StatusNode };
-
-const INIT_NODES = [
-  { id: 'x',        type: 'statusNode', position: { x: 0,   y: 0 },   data: { emoji: '\ud835\udd4f',  name: 'X / Twitter',   status: 'ok', label: 'HEALTHY' } },
-  { id: 'scraper',  type: 'statusNode', position: { x: 230, y: 0 },   data: { emoji: '\u2699\ufe0f', name: 'News Scraper',  status: 'ok', label: 'HEALTHY' } },
-  { id: 'discord',  type: 'statusNode', position: { x: 490, y: 0 },   data: { emoji: '\ud83d\udcac', name: 'Discord',       status: 'ok', label: 'HEALTHY' } },
-  { id: 'claude',   type: 'statusNode', position: { x: 60,  y: 170 }, data: { emoji: '\u2726',  name: 'Claude API',    status: 'ok', label: 'HEALTHY' } },
-  { id: 'openclaw', type: 'statusNode', position: { x: 320, y: 170 }, data: { emoji: '\ud83e\udd9e', name: 'OpenClaw',      status: 'ok', label: 'CONNECTING\u2026' } },
-];
-
-function makeEdge(id, source, target, label, sourceHandle, targetHandle) {
-  return {
-    id, source, target, label,
-    sourceHandle: sourceHandle || 'right',
-    targetHandle: targetHandle || 'left',
-    type: 'smoothstep',
-    animated: true,
-    style: { stroke: '#b3e8ce', strokeWidth: 2 },
-    labelStyle: { fontSize: 10, fill: '#8c897f', fontFamily: 'DM Sans, sans-serif' },
-    labelBgStyle: { fill: '#ffffff', fillOpacity: 0.85 },
-    labelBgPadding: [4, 2],
-    labelBgBorderRadius: 3,
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#b3e8ce', width: 14, height: 14 },
-  };
+// ── Swim lane background node ────────────────────────────────────────────────
+function LaneNode({ data }) {
+  return h('div', { className:'rf-lane', style:{ width:data.w+'px', height:data.h+'px', background:data.bg, borderColor:data.bdr } },
+    h('div', { className:'rf-lane-lbl', style:{ color:data.txtColor, background:data.lblBg } }, data.label)
+  );
 }
 
-const INIT_EDGES = [
-  makeEdge('e-x-scraper',        'x',        'scraper',  'fetch tweets'),
-  makeEdge('e-scraper-discord',  'scraper',  'discord',  'daily digest'),
-  makeEdge('e-openclaw-discord', 'openclaw', 'discord',  'replies',    'top', 'bottom'),
-  makeEdge('e-claude-openclaw',  'claude',   'openclaw', 'inference'),
-];
+const nodeTypes = { statusNode: StatusNode, laneNode: LaneNode };
 
+// ── Edge factory ─────────────────────────────────────────────────────────────
+function mkEdge(id, source, target, label, sh, th) {
+  return { id, source, target, label, sourceHandle:sh||'right', targetHandle:th||'left',
+    type:'smoothstep', animated:true,
+    style:{ stroke:'#b3e8ce', strokeWidth:2 },
+    labelStyle:{ fontSize:12, fill:'#6b6860', fontFamily:'DM Sans,sans-serif', fontWeight:500 },
+    labelBgStyle:{ fill:'#fff', fillOpacity:.85 }, labelBgPadding:[4,2], labelBgBorderRadius:3,
+    markerEnd:{ type:MarkerType.ArrowClosed, color:'#b3e8ce', width:14, height:14 } };
+}
+
+// ── Layout constants ─────────────────────────────────────────────────────────
+const NODE_W=160, NODE_H=110, COL_GAP=160, LANE_PAD_X=52, LANE_PAD_R=36, LANE_PAD_Y=28, LANE_GAP=16, LANE_LBL_W=36;
+const LANE_STYLES = {
+  '#f6f0ff':{ bdr:'#d9ccf0', lblBg:'#e8ddf8', txt:'#6b45a0' },
+  '#eff8f3':{ bdr:'#c4e6d4', lblBg:'#d4f0e0', txt:'#1a7c4a' },
+  '#eff6ff':{ bdr:'#c0d8f0', lblBg:'#d4e6f8', txt:'#1a5a9e' },
+};
+
+// ── Build from config ────────────────────────────────────────────────────────
+function buildFlow(cfg) {
+  const lookup = {};
+  if (cfg) {
+    lookup[cfg.agent.id] = { emoji:cfg.agent.emoji, name:cfg.agent.name };
+    lookup.model = { emoji:'🤖', name:cfg.model.name };
+    for (const ch of cfg.channels) lookup[ch.id] = { emoji:ch.emoji, name:ch.name };
+    for (const a of cfg.automations) lookup[a.id] = { emoji:a.emoji, name:a.name };
+  }
+  const nodes=[], edges=[];
+  if (!cfg?.flow?.lanes) return { nodes, edges };
+
+  // Group by lane
+  const byLane = {};
+  for (const ln of cfg.flow.lanes) byLane[ln.id]=[];
+  for (const fn of cfg.flow.nodes) if(byLane[fn.lane]) byLane[fn.lane].push(fn);
+  for (const k of Object.keys(byLane)) byLane[k].sort((a,b)=>a.col-b.col);
+
+  // Uniform lane width
+  let maxCols=0;
+  for (const k of Object.keys(byLane)) maxCols=Math.max(maxCols, byLane[k].length);
+  const laneW = Math.max(LANE_LBL_W+LANE_PAD_X+maxCols*NODE_W+(maxCols-1)*COL_GAP+LANE_PAD_R, 420);
+
+  let y=0;
+  for (const lane of cfg.flow.lanes) {
+    const items = byLane[lane.id]||[];
+    const laneH = Math.max(NODE_H+LANE_PAD_Y*2, 166);
+    const st = LANE_STYLES[lane.color]||{ bdr:'#d0cec6', lblBg:'#e0e0e0', txt:'#666' };
+
+    nodes.push({ id:'lane-'+lane.id, type:'laneNode', position:{x:0,y}, zIndex:-1, selectable:false, draggable:false,
+      data:{ label:lane.label, w:laneW, h:laneH, bg:lane.color, bdr:st.bdr, lblBg:st.lblBg, txtColor:st.txt } });
+
+    // Center nodes in lane
+    const startX = LANE_LBL_W+LANE_PAD_X;
+    const totalW = items.length*NODE_W+(items.length-1)*COL_GAP;
+    const offX = startX+Math.max(0,(laneW-startX-LANE_PAD_R-totalW)/2);
+    const nodeY = y+Math.max(LANE_PAD_Y,(laneH-NODE_H)/2);
+
+    for (let i=0;i<items.length;i++) {
+      const fn=items[i], info=lookup[fn.id]||{emoji:'?',name:fn.id};
+      nodes.push({ id:fn.id, type:'statusNode',
+        position:{ x:offX+i*(NODE_W+COL_GAP), y:nodeY },
+        data:{ emoji:info.emoji, name:info.name, status:'ok', label:fn.id===cfg.agent.id?'CONNECTING…':'HEALTHY' } });
+    }
+    y += laneH+LANE_GAP;
+  }
+
+  for (const e of cfg.flow.edges)
+    edges.push(mkEdge('e-'+e.from+'-'+e.to, e.from, e.to, e.label||'', e.sourceHandle, e.targetHandle));
+
+  return { nodes, edges };
+}
+
+const cfg = window._watchclawConfig||null;
+const { nodes:initN, edges:initE } = buildFlow(cfg);
+
+// ── React component ──────────────────────────────────────────────────────────
 function FlowDiagram() {
-  const [nodes, setNodes] = useState(INIT_NODES);
-  const [edges, setEdges] = useState(INIT_EDGES);
+  const [nodes, setNodes] = useState(initN);
+  const [edges, setEdges] = useState(initE);
 
-  useEffect(() => {
-    window.updateReactFlow = function(nodesData, selectedId) {
-      setNodes(prev => prev.map(n => ({
-        ...n,
-        selected: n.id === selectedId,
-        data: {
-          ...n.data,
-          status: nodesData[n.id] ? nodesData[n.id].status : n.data.status,
-          label:  nodesData[n.id] ? nodesData[n.id].label  : n.data.label,
-        }
-      })));
-
-      setEdges(prev => prev.map(e => {
-        const srcStatus = nodesData[e.source] ? nodesData[e.source].status : 'ok';
-        const color = srcStatus === 'ok' ? '#b3e8ce' : srcStatus === 'warn' ? '#f5dfa0' : '#f5b8c0';
-        return {
-          ...e,
-          style: { ...e.style, stroke: color },
-          markerEnd: { ...e.markerEnd, color },
-        };
+  useEffect(()=>{
+    window.updateReactFlow = (data, selId) => {
+      setNodes(prev=>prev.map(n=>{
+        if(n.type==='laneNode') return n;
+        return { ...n, selected:n.id===selId,
+          data:{ ...n.data, status:data[n.id]?.status||n.data.status, label:data[n.id]?.label||n.data.label } };
+      }));
+      setEdges(prev=>prev.map(e=>{
+        const s=data[e.source]?.status||'ok';
+        const c=s==='ok'?'#b3e8ce':s==='warn'?'#f5dfa0':'#f5b8c0';
+        return { ...e, style:{...e.style,stroke:c}, markerEnd:{...e.markerEnd,color:c} };
       }));
     };
+    // Sync if data arrived before module loaded
+    const nd=window._watchclawNodes, sel=W.selId;
+    if(nd&&Object.keys(nd).length>0) window.updateReactFlow(nd, sel);
+    return ()=>{ delete window.updateReactFlow; };
+  },[]);
 
-    // Sync with vanilla JS state that loaded before this module
-    const nd = window._watchclawNodes;
-    const sel = window._watchclawSelectedId || 'openclaw';
-    if (nd && Object.keys(nd).length > 0) {
-      window.updateReactFlow(nd, sel);
-    }
-
-    return () => { delete window.updateReactFlow; };
-  }, []);
-
-  const onNodeClick = useCallback((_, node) => {
-    if (window.selectNode) window.selectNode(node.id);
-  }, []);
+  const onClick = useCallback((_,node)=>{ if(node.type!=='laneNode') W.select(node.id); },[]);
 
   return h(ReactFlow, {
-    nodes, edges, nodeTypes, onNodeClick,
-    fitView: true,
-    fitViewOptions: { padding: 0.25 },
-    nodesDraggable: false,
-    nodesConnectable: false,
-    elementsSelectable: true,
-    panOnDrag: false,
-    zoomOnScroll: false,
-    zoomOnPinch: false,
-    zoomOnDoubleClick: false,
-    preventScrolling: false,
-    proOptions: { hideAttribution: true },
-    minZoom: 0.5,
-    maxZoom: 1.5,
-  },
-    h(Background, { variant: 'dots', gap: 28, size: 1, color: '#d0cec6' })
-  );
+    nodes, edges, nodeTypes, onNodeClick:onClick,
+    fitView:true, fitViewOptions:{padding:.15},
+    nodesDraggable:false, nodesConnectable:false, elementsSelectable:true,
+    panOnDrag:false, zoomOnScroll:false, zoomOnPinch:false, zoomOnDoubleClick:false,
+    preventScrolling:false, proOptions:{hideAttribution:true}, minZoom:.5, maxZoom:1.5
+  }, h(Background,{variant:'dots',gap:28,size:1,color:'#d0cec6'}));
 }
 
-const root = createRoot(document.getElementById('react-flow-root'));
-root.render(h(FlowDiagram));
+createRoot(document.getElementById('rf-root')).render(h(FlowDiagram));
 </script>
+
 </body>
 </html>
