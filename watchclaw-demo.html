@@ -380,7 +380,7 @@ const W = (() => {
       d = { statusSummary:`${agentName} gateway process is not running. All message processing has stopped.`,
         rootCause:'pgrep -f "openclaw" returned no matching processes', rootCauseHL:'no matching processes',
         impact:'All channels are down — no messages are being received or sent.',
-        prompt:`My ${agentName} gateway is down. Check: tail -30 /tmp/openclaw/*.log then restart: launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
+        prompt:`My ${agentName} gateway is down. Check: tail -30 ~/.openclaw/logs/*.log then restart: launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
     } else if (diag?.pattern==='crash-loop') {
       const impactMap = { whatsapp:'WhatsApp messages are not being received or sent. Discord still works.', discord:'Discord messages are not being received or sent.', telegram:'Telegram messages are down.' };
       d = { statusSummary:diag.summary, rootCause:diag.cause, rootCauseHL:diag.hl,
@@ -393,15 +393,15 @@ const W = (() => {
     } else if (diag?.pattern==='gw-unresponsive') {
       d = { statusSummary:diag.summary, rootCause:diag.cause, rootCauseHL:diag.hl,
         impact:'All message processing is likely frozen. The process may be deadlocked.',
-        prompt:`Check: ps aux | grep openclaw and tail -50 /tmp/openclaw/*.log. If hung, restart: kill $(pgrep -f openclaw) && sleep 2 && launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
+        prompt:`Check: ps aux | grep openclaw and tail -50 ~/.openclaw/logs/*.log. If hung, restart: kill $(pgrep -f openclaw) && sleep 2 && launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist` };
     } else if (status==='err') {
       const ev = clean.find(e=>e.level==='error');
       let msg = ev?.msg||''; const raw = ev?.rawMsg||'';
       if (!msg) { const m=raw.match(/"1"\s*:\s*"([^"]+)"/); if(m) msg=m[1].substring(0,150); }
       const hl = (msg.match(/hit \d+ restarts|not linked|ECONNREFUSED|ETIMEDOUT|crash|fatal/i)||[])[0]||'error';
-      d = { statusSummary:`${agentName} is running but reporting errors.`, rootCause:msg||'Unknown error — check /tmp/openclaw/*.log', rootCauseHL:hl,
+      d = { statusSummary:`${agentName} is running but reporting errors.`, rootCause:msg||'Unknown error — check ~/.openclaw/logs/*.log', rootCauseHL:hl,
         impact:'Some or all message processing may be affected.',
-        prompt:`My ${agentName} is reporting errors. Run: tail -30 /tmp/openclaw/$(ls -t /tmp/openclaw/ | head -1) and openclaw channels status --probe. Tell me what's broken.` };
+        prompt:`My ${agentName} is reporting errors. Run: tail -30 ~/.openclaw/logs/$(ls -t ~/.openclaw/logs/ | head -1) and openclaw channels status --probe. Tell me what's broken.` };
     } else if (status==='warn') {
       const ev = clean.find(e=>e.level==='warn');
       let msg = ev?.msg||''; const raw = ev?.rawMsg||'';
@@ -409,7 +409,7 @@ const W = (() => {
       const hl = (msg.match(/restart|timeout|limit|deprecated|slow|retry/i)||[])[0]||'warning';
       d = { statusSummary:`${agentName} is running with warnings. This may resolve on its own.`, rootCause:msg||'Warning in logs', rootCauseHL:hl,
         impact:'Message processing likely still working but may be degraded.',
-        prompt:`My ${agentName} is showing warnings. Run: tail -20 /tmp/openclaw/$(ls -t /tmp/openclaw/ | head -1) and openclaw channels status --probe.` };
+        prompt:`My ${agentName} is showing warnings. Run: tail -20 ~/.openclaw/logs/$(ls -t ~/.openclaw/logs/ | head -1) and openclaw channels status --probe.` };
     }
 
     // Metrics

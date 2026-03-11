@@ -23,7 +23,7 @@ Watchclaw watches your OpenClaw process and automation workflows. When something
 ### Step 1 — Download and install
 
 ```bash
-git clone https://github.com/yourusername/watchclaw.git
+git clone https://github.com/shiki4709/watchclaw.git
 cd watchclaw
 npm install
 ```
@@ -44,11 +44,7 @@ Open `.env` in any text editor and fill in:
 3. Server Settings → Integrations → Webhooks → New Webhook
 4. Copy the webhook URL and paste it here
 
-**`OPENCLAW_LOG_FILE`** — path to your OpenClaw log file.
-Not sure where it is? Run this in Terminal:
-```bash
-find ~ -name "*.log" 2>/dev/null | grep -i openclaw
-```
+**`OPENCLAW_LOG_DIR`** *(optional)* — the collector auto-detects your OpenClaw log directory by checking `~/.openclaw/logs/` and `/tmp/openclaw/`. Only set this if your logs are somewhere else.
 
 ### Step 3 — Start the server
 
@@ -120,10 +116,12 @@ The server can run on a free Railway or Render instance so it works even if your
 
 ```
 watchclaw/
-├── collector.js    # Runs on your machine, watches OpenClaw, sends heartbeats
-├── server.js       # Receives heartbeats, detects silence, sends Discord DMs
+├── collector.js         # Runs on your machine, watches OpenClaw, sends heartbeats
+├── server.js            # Receives heartbeats, detects silence, sends Discord DMs
+├── watchclaw-demo.html  # Live dashboard with swim lane flow diagram
+├── config.example.json  # Dashboard config template (copy to config.json)
 ├── package.json
-├── .env.example    # Environment variable template
+├── .env.example         # Environment variable template
 └── README.md
 ```
 
@@ -133,10 +131,10 @@ watchclaw/
 
 - [x] Silent failure detection + Discord alerts
 - [x] Basic status dashboard
-- [ ] Visual flow diagram (see which node in your chain broke)
+- [x] Visual flow diagram (see which node in your chain broke)
 - [ ] n8n / Make / Zapier webhook support
-- [ ] "Ask Claude Code" prompts — one-click copy to fix issues
-- [ ] Self-hosted dashboard
+- [x] "Ask Claude Code" prompts — one-click copy to fix issues
+- [x] Self-hosted dashboard
 - [ ] Hosted version at watchclaw.app
 
 ---

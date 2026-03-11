@@ -27,8 +27,8 @@ const CONFIG = {
   //   ~/.openclaw/logs/openclaw.log
   //   ~/Library/Logs/openclaw.log
   //   ./openclaw.log  (if run from project dir)
-  // Log directory — the collector will find today's log file automatically
-  logDir: process.env.OPENCLAW_LOG_DIR || '/tmp/openclaw',
+  // Log directory — auto-detected if not set
+  logDir: process.env.OPENCLAW_LOG_DIR || '',
   logFilePattern: process.env.OPENCLAW_LOG_FILE || '', // if set, use this exact file instead
 
   // How many recent log lines to send with each heartbeat
@@ -42,16 +42,40 @@ const CONFIG = {
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
+// Auto-detect the OpenClaw log directory by probing common locations
+function detectLogDir() {
+  if (CONFIG.logDir) return CONFIG.logDir;
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
+  const candidates = [
+    path.join(homeDir, '.openclaw', 'logs'),
+    '/tmp/openclaw',
+    path.join(homeDir, 'Library', 'Logs', 'openclaw'),
+  ];
+  for (const dir of candidates) {
+    try {
+      const entries = fs.readdirSync(dir);
+      if (entries.some(f => /openclaw.*\.log$|gateway\.log$/i.test(f))) {
+        console.log(`[detect] ✓ Found OpenClaw logs in ${dir}`);
+        return dir;
+      }
+    } catch {}
+  }
+  console.log('[detect] ✗ Could not find OpenClaw log directory — set OPENCLAW_LOG_DIR');
+  return null;
+}
+
 // Resolve the current log file (OpenClaw rotates daily: openclaw-YYYY-MM-DD.log)
 function getCurrentLogFile() {
   if (CONFIG.logFilePattern) return CONFIG.logFilePattern;
+  const logDir = detectLogDir();
+  if (!logDir) return null;
   try {
-    // Find the most recently modified openclaw log file
-    const files = fs.readdirSync(CONFIG.logDir)
-      .filter(f => /^openclaw-\d{4}-\d{2}-\d{2}\.log$/.test(f))
-      .map(f => ({ name: f, mtime: fs.statSync(path.join(CONFIG.logDir, f)).mtimeMs }))
+    // Find the most recently modified log file (dated or gateway.log)
+    const files = fs.readdirSync(logDir)
+      .filter(f => /^openclaw-\d{4}-\d{2}-\d{2}\.log$|^gateway\.log$/.test(f))
+      .map(f => ({ name: f, mtime: fs.statSync(path.join(logDir, f)).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime);
-    return files.length > 0 ? path.join(CONFIG.logDir, files[0].name) : null;
+    return files.length > 0 ? path.join(logDir, files[0].name) : null;
   } catch {
     return null;
   }
@@ -320,7 +344,7 @@ console.log('');
 console.log('  🦀 Watchclaw Collector starting...');
 console.log(`  Agent : ${CONFIG.agentName}`);
 console.log(`  Server: ${CONFIG.serverUrl}`);
-console.log(`  Logs  : ${CONFIG.logFilePattern || CONFIG.logDir + '/openclaw-<date>.log'}`);
+console.log(`  Logs  : ${CONFIG.logFilePattern || (CONFIG.logDir ? CONFIG.logDir : '(auto-detect)')}`);
 console.log(`  Gateway: ${CONFIG.gatewayUrl}`);
 console.log(`  Ping  : every ${CONFIG.intervalMs / 1000}s`);
 console.log('');

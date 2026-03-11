@@ -1,0 +1,39 @@
+{
+  "agent": {
+    "id": "my-agent",
+    "name": "My Agent",
+    "emoji": "🤖",
+    "description": "My automation agent"
+  },
+
+  "model": {
+    "id": "gemini-2.5-flash",
+    "name": "Gemini 2.5 Flash",
+    "provider": "google",
+    "costPerMillionInput": 0.15,
+    "costPerMillionOutput": 0.60
+  },
+
+  "channels": [
+    { "id": "discord",  "name": "Discord",  "emoji": "💬", "sub": "gateway · bot" }
+  ],
+
+  "automations": [],
+
+  "flow": {
+    "lanes": [
+      { "id": "automations",    "label": "AUTOMATIONS",    "color": "#f6f0ff" },
+      { "id": "agent",          "label": "AGENT",          "color": "#eff8f3" },
+      { "id": "infrastructure", "label": "INFRASTRUCTURE", "color": "#eff6ff" }
+    ],
+    "nodes": [
+      { "id": "my-agent", "lane": "agent",          "col": 0 },
+      { "id": "model",    "lane": "infrastructure", "col": 0 },
+      { "id": "discord",  "lane": "infrastructure", "col": 1 }
+    ],
+    "edges": [
+      { "from": "my-agent", "to": "discord", "label": "messages", "sourceHandle": "bottom", "targetHandle": "top" },
+      { "from": "model",    "to": "my-agent", "label": "inference", "sourceHandle": "top",    "targetHandle": "bottom" }
+    ]
+  }
+}
