@@ -4,8 +4,7 @@
 
 Watchclaw watches your OpenClaw process and automation workflows. When something silently stops working, you get a Discord DM within 5 minutes.
 
-> ![Discord alert screenshot coming soon](docs/discord-alert.png)
-> *Discord alert screenshot coming soon*
+![Watchclaw dashboard demo](docs/demo.gif)
 
 ---
 
